@@ -190,22 +190,38 @@ export function createHeldModel(itemId) {
   return g;
 }
 
-// 创建玩家手臂（Steve/埃里克森风格：青色衣袖 + 肤色手）
+// 美味特工队角色第一人称手臂配色（袖子/袖口）
+export const AGENT_ARMS = {
+  burger:  { sleeve: 0xd84b3c, cuff: 0x3aa86a }, // 汉堡特工：红衣 + 绿手套
+  fries:   { sleeve: 0x3aa86a, cuff: 0xf2f0ea }, // 薯条厨娘：绿衣 + 白袖口
+  popcorn: { sleeve: 0x7a4a86, cuff: 0xf0a83c }, // 鸡米花小弟：紫衣 + 橙手套
+  witch:   { sleeve: 0xe58fb0, cuff: 0xe58fb0 }, // 魔法小女巫：粉袖
+};
+
 // 创建玩家手臂（Steve 风格第一人称：一条从右下角伸向镜头的手臂）
 // 手臂沿 -Z（朝前方/镜头）伸展，近大端在屏幕右下、手腕在前方握物品
-// armor: null=青色衣袖, 'iron'/'diamond'=套上护臂
-export function createArmModel(armor = null) {
+// armor: null=角色衣袖, 'iron'/'diamond'=套上护臂；armColors 可覆盖袖子/拳头颜色
+export function createArmModel(armor = null, armColors = null) {
   const g = new THREE.Group();
-  const sleeveColor = armor === 'diamond' ? 0x3fd9d9 : armor === 'iron' ? 0xe8e8ee : 0x2ea8c8;
-  const sleeveLo = armor === 'diamond' ? 0x2bb0b0 : armor === 'iron' ? 0xb8b8c0 : 0x1f86a8;
+  const sleeveColor = armor === 'diamond' ? 0x3fd9d9 : armor === 'iron' ? 0xe8e8ee : (armColors ? armColors.sleeve : 0x2ea8c8);
+  const sleeveLo = armor === 'diamond' ? 0x2bb0b0 : armor === 'iron' ? 0xb8b8c0 : (armColors ? shade(armColors.sleeve) : 0x1f86a8);
+  const fistColor = armColors ? (armColors.cuff || 0xe0a070) : 0xe0a070;
+  const fistLo = armColors ? shade(fistColor) : 0xc08050;
   // 前臂（衣袖）：沿 Z 轴长条形，从后下方伸向前方
   const arm = box(0.28, 0.28, 0.7, sleeveColor, 0, 0, -0.1);
   g.add(arm);
   // 衣袖阴影面，增加像素层次
   g.add(box(0.28, 0.06, 0.7, sleeveLo, 0, -0.11, -0.1));
-  // 拳头（肤色），在最前端
-  const fist = box(0.3, 0.3, 0.3, 0xe0a070, 0, 0, -0.55);
+  // 拳头（袖口/手套），在最前端
+  const fist = box(0.3, 0.3, 0.3, fistColor, 0, 0, -0.55);
   g.add(fist);
-  g.add(box(0.3, 0.06, 0.3, 0xc08050, 0, -0.12, -0.55)); // 拳头暗面
+  g.add(box(0.3, 0.06, 0.3, fistLo, 0, -0.12, -0.55)); // 拳头暗面
   return g;
+}
+
+// 把颜色压暗约 20%，生成阴影色
+function shade(hex) {
+  const c = new THREE.Color(hex);
+  c.multiplyScalar(0.78);
+  return c.getHex();
 }

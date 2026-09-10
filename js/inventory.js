@@ -1,6 +1,6 @@
 import * as THREE from 'three';
-import { BlockType, BlockNames, BLOCK_TEXTURES, createBlockTexture, ATLAS_COLS, TEX_SIZE } from './voxel.js?v=20260922a';
-import { ItemNames, getItemIcon } from './equipment.js?v=20260922a';
+import { BlockType, BlockNames, BLOCK_TEXTURES, createBlockTexture, ATLAS_COLS, TEX_SIZE } from './voxel.js?v=20260924d';
+import { ItemNames, getItemIcon } from './equipment.js?v=20260924d';
 
 /**
  * 创造模式背包：

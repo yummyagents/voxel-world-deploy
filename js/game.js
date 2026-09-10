@@ -8,26 +8,26 @@ import {
   World, Chunk, BlockType, BlockNames, isSolid,
   CHUNK_SIZE, CHUNK_HEIGHT, RENDER_DISTANCE, getBlockColor,
   isMobileDevice, getRenderDistance, getBlockDrop, BiomeNames, Biome,
-} from './voxel.js?v=20260922a';
-import { AnimalManager, Sheep, Rabbit, Horse, Cow, Pig, Chicken, Villager, IronGolem } from './animals.js?v=20260922a';
-import { WeatherSystem, WeatherType, WeatherNames } from './weather.js?v=20260922a';
-import { DayNightCycle } from './daynight.js?v=20260922a';
-import { DropManager } from './drops.js?v=20260922a';
-import { VillageGenerator } from './village.js?v=20260922a';
-import { Inventory } from './inventory.js?v=20260922a';
-import { ExchangeShop } from './exchange.js?v=20260922a';
-import { createHeldModel, createArmModel, ItemNames, getItemIcon } from './equipment.js?v=20260922a';
-import { StructureGenerator } from './structures.js?v=20260922a';
-import { PlayerCharacter } from './player-character.js?v=20260922a';
-import { SakuraPetals } from './sakura.js?v=20260922a';
-import { BirdManager } from './birds.js?v=20260922a';
-import { SoundFX } from './audio.js?v=20260922a';
-import { Tutorial } from './tutorial.js?v=20260922a';
+} from './voxel.js?v=20260924d';
+import { AnimalManager, Sheep, Rabbit, Horse, Cow, Pig, Chicken, Villager, IronGolem } from './animals.js?v=20260924d';
+import { WeatherSystem, WeatherType, WeatherNames } from './weather.js?v=20260924d';
+import { DayNightCycle } from './daynight.js?v=20260924d';
+import { DropManager } from './drops.js?v=20260924d';
+import { VillageGenerator } from './village.js?v=20260924d';
+import { Inventory } from './inventory.js?v=20260924d';
+import { ExchangeShop } from './exchange.js?v=20260924d';
+import { createHeldModel, createArmModel, ItemNames, getItemIcon, AGENT_ARMS } from './equipment.js?v=20260924d';
+import { StructureGenerator } from './structures.js?v=20260924d';
+import { PlayerCharacter } from './player-character.js?v=20260924d';
+import { SakuraPetals } from './sakura.js?v=20260924d';
+import { BirdManager } from './birds.js?v=20260924d';
+import { SoundFX } from './audio.js?v=20260924d';
+import { Tutorial } from './tutorial.js?v=20260924d';
 import {
   loadSave, writeSave, clearSave, hasSave,
   exportSave, importSave,
-} from './save.js?v=20260922a';
-import { Portfolio } from './portfolio.js?v=20260922a';
+} from './save.js?v=20260924d';
+import { Portfolio } from './portfolio.js?v=20260924d';
 
 /* ============================================
    玩家类 - 第一人称角色控制
@@ -1226,7 +1226,13 @@ class Game {
 
     const hasExisting = hasSave();
     if (continueBtn) continueBtn.style.display = hasExisting ? '' : 'none';
-    // “继续”按钮直接让点击冒泡到开始界面（存档已在初始化时自动加载），即可进入游戏
+    // “继续”按钮：显式进入游戏（与开始按钮同一入口）
+    if (continueBtn) {
+      continueBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (typeof this._requestEnterGame === 'function') this._requestEnterGame();
+      });
+    }
     if (newWorldBtn) {
       newWorldBtn.addEventListener('click', (e) => {
         e.stopPropagation();
@@ -1275,16 +1281,27 @@ class Game {
     });
   }
 
-  /** 读取当前选择的主角性别（开始前后都可用）：优先独立本地存储，其次存档 */
+  /** 合法主角 key */
+  _validAgent(k) {
+    return ['burger', 'fries', 'popcorn', 'witch'].includes(k) ? k : null;
+  }
+
+  /** 读取当前选择的主角：优先独立本地存储，其次存档；兼容旧值 boy/girl */
   _getSelectedChar() {
     try {
       const c = localStorage.getItem('voxel_character_v1');
-      if (c === 'girl' || c === 'boy') return c;
+      if (this._validAgent(c)) return c;
+      if (c === 'boy') return 'burger';
+      if (c === 'girl') return 'witch';
     } catch (e) {}
-    return this.saveData?.player?.character === 'girl' ? 'girl' : 'boy';
+    const saved = this.saveData?.player?.character;
+    if (this._validAgent(saved)) return saved;
+    if (saved === 'boy') return 'burger';
+    if (saved === 'girl') return 'witch';
+    return 'burger';
   }
 
-  /** 开始界面主角选择（男生蓝宝 / 女生粉嘟），选择立即写入本地保存 */
+  /** 开始界面主角选择（美味特工队 4 角色），选择立即写入本地保存 */
   _initCharSelect() {
     this.character = this._getSelectedChar();
     const cards = document.querySelectorAll('.char-card');
@@ -1298,6 +1315,8 @@ class Game {
       });
       // 第三人称角色实时换装
       if (this.playerChar) this.playerChar.setSkin(gender);
+      // 第一人称手臂颜色跟随角色
+      try { if (this.heldGroup) this._refreshHeldView(); } catch (e) {}
       // 立即持久化（开始游戏前也能记住），并同步到游戏存档
       try { localStorage.setItem('voxel_character_v1', gender); } catch (e) {}
       if (this.saveData) {
@@ -1308,10 +1327,15 @@ class Game {
       if (!silent) { try { this.sound && this.sound.click && this.sound.click(); } catch (e) {} }
     };
     cards.forEach((c) => {
-      // 同时支持 click 与 touchstart（手机端更跟手），并阻止冒泡触发“开始游戏”
-      const onPick = (e) => { e.stopPropagation(); e.preventDefault(); apply(c.dataset.char); };
+      // pointerdown 最优先（手机触屏+桌面都能立即响应）；click 兜底
+      const onPick = (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (e.stopImmediatePropagation) e.stopImmediatePropagation();
+        apply(c.dataset.char);
+      };
+      c.addEventListener('pointerdown', onPick, true);
       c.addEventListener('click', onPick);
-      c.addEventListener('touchstart', onPick, { passive: false });
     });
     apply(this.character, true);
   }
@@ -1322,29 +1346,40 @@ class Game {
     const panel = document.getElementById('mMenuPanel');
     if (!btn || !panel) return;
 
-    const closePanel = () => { panel.classList.remove('open'); };
-    const togglePanel = (e) => {
-      e.stopPropagation();
-      e.preventDefault();
-      panel.classList.toggle('open');
+    // 仅在 pointerdown(捕获阶段) 真正执行业务一次；touchstart / click 只拦截、
+    // 不重复执行。真机触摸时 pointerdown 与 touchstart 都会来，若都执行会让
+    // “切换视角 / 飞行 / 背包”等开关类动作点两次（开了又关 = 没反应），拍照也会连拍。
+    const singleFire = (el, action) => {
+      let locked = false;
+      const handler = (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (e.type !== 'pointerdown') return; // touchstart/click 仅拦截
+        if (locked) return;
+        locked = true;
+        setTimeout(() => { locked = false; }, 400);
+        try { action(); } catch (err) { console.warn('[mobile-menu]', err); }
+      };
+      el.addEventListener('pointerdown', handler, { capture: true });
+      el.addEventListener('touchstart', handler, { passive: false, capture: true });
+      el.addEventListener('click', handler);
     };
-    btn.addEventListener('click', togglePanel);
-    btn.addEventListener('touchstart', togglePanel, { passive: false });
-    // 点其它地方收起菜单
-    document.addEventListener('touchstart', (e) => {
-      if (panel.classList.contains('open') && !panel.contains(e.target) && e.target !== btn) closePanel();
-    });
+
+    singleFire(btn, () => panel.classList.toggle('open'));
 
     panel.querySelectorAll('.m-fn').forEach((b) => {
-      const fire = (e) => {
-        e.stopPropagation();
-        e.preventDefault();
+      singleFire(b, () => {
         this._mobileAction(b.dataset.fn);
-        closePanel();
-      };
-      b.addEventListener('click', fire);
-      b.addEventListener('touchstart', fire, { passive: false });
+        panel.classList.remove('open');
+      });
     });
+
+    // 点击菜单以外区域收起（捕获阶段：菜单按钮/面板自身由上面的 singleFire 处理）
+    document.addEventListener('pointerdown', (e) => {
+      if (panel.classList.contains('open') && !panel.contains(e.target) && !btn.contains(e.target)) {
+        panel.classList.remove('open');
+      }
+    }, { capture: true });
   }
 
   /** 移动端功能按钮对应的动作（复用键盘逻辑） */
@@ -1606,7 +1641,9 @@ class Game {
     const hasDiamond = this._hotbarHasItem([-10, -9, -11, -12]);
     const hasIron = this._hotbarHasItem([-6, -5, -7, -8]);
     const armor = hasDiamond ? 'diamond' : hasIron ? 'iron' : null;
-    const arm = createArmModel(armor);
+    const agentKey = this.character || this._getSelectedChar();
+    const armColors = armor ? null : (AGENT_ARMS[agentKey] || null);
+    const arm = createArmModel(armor, armColors);
     arm.position.set(0.62, -0.62, -0.5);
     arm.rotation.set(0, 0, 0);
     this.heldGroup.add(arm);
@@ -1789,6 +1826,11 @@ class Game {
       const slot = document.createElement('div');
       slot.className = `m-slot${i === this.selectedSlot ? ' selected' : ''}`;
       slot.dataset.index = i;
+      // 数字角标 1-9
+      const num = document.createElement('div');
+      num.className = 'm-slot-num';
+      num.textContent = (i === 8) ? '🧲' : String(i + 1);
+      slot.appendChild(num);
       const t = this.inventory ? this.inventory.hotbar[i] : BlockType.AIR;
       if (t && t < 0) {
         // 装备：用装备像素图标
@@ -2048,7 +2090,9 @@ class Game {
         }
       };
 
-      this.ui.startScreen.addEventListener('click', () => {
+      const enterGame = () => {
+        // 确保已同步当前选择的主角，避免“先进游戏后卡片没生效”
+        if (this.playerChar && this.character) this.playerChar.setSkin(this.character);
         this.isRunning = true;
         this.ui.startScreen.style.display = 'none';
         this.sound.unlock();
@@ -2064,8 +2108,17 @@ class Game {
           this.camera.position.y + lookDir.y,
           this.camera.position.z + lookDir.z
         );
-        requestLock();
-      });
+      };
+      // 统一入口：开始按钮 / 继续按钮 都走这里
+      this._requestEnterGame = () => { enterGame(); requestLock(); };
+      // 只能点击醒目的「开始游戏」按钮进入（避免在空白处误触）
+      const startBtn = document.getElementById('startPlayBtn');
+      if (startBtn) {
+        startBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          this._requestEnterGame();
+        });
+      }
 
       this.ui.pauseScreen.addEventListener('click', requestLock);
       this.canvas.addEventListener('click', requestLock);
@@ -2073,7 +2126,8 @@ class Game {
 
     // ----- 移动端：直接进入游戏 + 触摸控制 -----
     if (this.isMobile) {
-      this.ui.startScreen.addEventListener('click', () => {
+      const enterGameMobile = () => {
+        if (this.playerChar && this.character) this.playerChar.setSkin(this.character);
         this.isRunning = true;
         this.ui.startScreen.style.display = 'none';
         this.sound.unlock();
@@ -2090,7 +2144,16 @@ class Game {
           this.camera.position.z + lookDir.z
         );
         this._showGameUI(true);
-      });
+      };
+      this.ui._showMobileGame = () => { enterGameMobile(); };
+      // 统一入口（移动端不请求指针锁定）
+      this._requestEnterGame = () => { enterGameMobile(); };
+      // 只能点击醒目的「开始游戏」按钮进入（移动端）
+      const startBtn = document.getElementById('startPlayBtn');
+      if (startBtn) {
+        startBtn.addEventListener('pointerdown', (e) => { e.preventDefault(); e.stopPropagation(); enterGameMobile(); }, true);
+        startBtn.addEventListener('click', (e) => { e.stopPropagation(); });
+      }
 
       this.ui.pauseScreen.addEventListener('click', () => {
         this.isRunning = true;
@@ -2122,6 +2185,8 @@ class Game {
     if (this.isMobile) {
       const mobileControls = document.getElementById('mobileControls');
       if (mobileControls) mobileControls.style.display = show ? 'block' : 'none';
+      // 每次进入游戏都重建一次底部方块栏，确保 1-9 格可点
+      if (show) { this._rebuildMobileHotbar(); this._updateMobileHotbar(); }
     }
   }
 

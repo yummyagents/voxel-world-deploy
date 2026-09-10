@@ -1,8 +1,7 @@
 // community.js —— 社区功能：访客计数 / 点赞 / 留言（直连 Supabase，浏览器端）
 // 使用 publishable(anon) key + 数据库 RLS/RPC 安全策略。功能失败时静默降级，不影响游戏。
-import { SUPABASE_URL, SUPABASE_ANON_KEY, isCommunityEnabled } from './config.js?v=20260922a';
+import { SUPABASE_URL, SUPABASE_ANON_KEY, isCommunityEnabled } from './config.js?v=20260924d';
 
-const LIKE_KEY = 'voxel_liked_v1';
 const CHAR_KEY = 'voxel_character_v1';
 
 export class Community {
@@ -48,7 +47,7 @@ export class Community {
     box.innerHTML = `
       <div class="cm-visits">🎉 已有 <b class="cm-visits-num">…</b> 位小探险家来过基地！</div>
       <button class="cm-like-btn" type="button">
-        <span class="cm-like-heart">🤍</span> 给 Heidi 点个赞 <span class="cm-like-count"></span>
+        <span class="cm-like-heart">❤️</span> 给 Heidi 点个赞，多点几下也可以哦 <span class="cm-like-count"></span>
       </button>
       <div class="cm-board">
         <div class="cm-board-title">💌 给 Heidi 留句话吧</div>
@@ -109,42 +108,62 @@ export class Community {
     }
   }
 
-  // ---------- 点赞（同一台设备只能点一次） ----------
+  // ---------- 点赞（可以反复点，每次 +1、飘爱心，短防抖防误连点） ----------
   async _initLikes() {
     const c = await this._getCounts();
-    const liked = localStorage.getItem(LIKE_KEY) === '1';
-    if (c) this._renderLike(c.likes, liked);
+    this._likeCount = c ? Number(c.likes) || 0 : null;
+    if (c) this._renderLike(this._likeCount);
     else this.likeCount.textContent = '';
   }
 
-  _renderLike(count, liked) {
+  _renderLike(count) {
+    if (count === null || count === undefined) return;
     this.likeCount.textContent = `(${this._fmt(count)})`;
-    this.likeHeart.textContent = liked ? '❤️' : '🤍';
-    this.likeBtn.classList.toggle('liked', liked);
+    this.likeHeart.textContent = '❤️';
+    this.likeBtn.classList.add('liked');
   }
 
   async _like() {
-    if (localStorage.getItem(LIKE_KEY) === '1') {
+    // 允许连点送赞：每次有效点击都 +1。极短间隔内（90ms）的连点也排进队列，
+    // 由 RPC 依次 +1，避免狂点瞬间打爆接口，同时保证"点了就涨"。
+    const now = Date.now();
+    if (this._likeLockUntil && now < this._likeLockUntil) {
+      // 太密集的连点：先飘心给反馈，并排队稍后补一次计数
       this._floatHeart();
-      return; // 已点过，只播个动画
+      this._pendingLike = (this._pendingLike || 0) + 1;
+      return;
     }
-    this.likeBtn.disabled = true;
+    this._likeLockUntil = now + 90;
+    // 乐观更新：立刻 +1、飘爱心，体验更爽
+    if (this._likeCount === null || this._likeCount === undefined) this._likeCount = 0;
+    this._likeCount += 1;
+    this._renderLike(this._likeCount);
+    this._floatHeart();
     try {
       const { data, error } = await this.client.rpc('increment_like');
       if (error) throw error;
-      let count = this._num(data);
-      if (typeof count !== 'number') {
+      const count = this._num(data);
+      if (typeof count === 'number') {
+        this._likeCount = count;
+        this._renderLike(count);
+      } else {
         const c = await this._getCounts();
-        count = c ? c.likes : 0;
+        if (c) { this._likeCount = Number(c.likes) || 0; this._renderLike(this._likeCount); }
       }
-      localStorage.setItem(LIKE_KEY, '1');
-      this._renderLike(count, true);
-      this._floatHeart();
     } catch (e) {
       console.warn('[community] 点赞失败', e?.message || e);
+      this._likeCount = Math.max(0, this._likeCount - 1);
+      this._renderLike(this._likeCount);
       this._shake(this.likeBtn);
     } finally {
-      this.likeBtn.disabled = false;
+      // 若连点期间堆积了未计数的点击，稍后补齐
+      if (this._pendingLike && this._pendingLike > 0) {
+        const n = this._pendingLike;
+        this._pendingLike = 0;
+        for (let i = 0; i < n; i++) {
+          setTimeout(() => this._like(), 120 * (i + 1));
+        }
+      }
     }
   }
 
