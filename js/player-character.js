@@ -8,12 +8,12 @@
  */
 import * as THREE from 'three';
 
-// 皮肤配色（史蒂夫风格）
+// 皮肤配色（男生：蓝宝；女生：粉嘟）
 const SKIN = {
   skin: 0xe8b07a,
   skinDark: 0xc98f5f,
   hair: 0x3d2a1a,
-  shirt: 0x2aa1c4,   // 青色上衣
+  shirt: 0x2aa1c4,   // 青色上衣（默认/男生）
   shirtDark: 0x1f7f9c,
   pants: 0x2b3fb0,   // 蓝裤子
   shoes: 0x3a3a42,
@@ -21,6 +21,23 @@ const SKIN = {
   ironDark: 0x9a9aa8,
   diamond: 0x7fe3e0,
   diamondDark: 0x3fb8c4,
+};
+
+// 男生「蓝宝」
+const SKIN_BOY = {
+  hair: 0x3d2a1a,
+  shirt: 0x2fb0e0,
+  shirtDark: 0x1d7fad,
+  pants: 0x2b3fb0,
+  shoes: 0x33383f,
+};
+// 女生「粉嘟」
+const SKIN_GIRL = {
+  hair: 0x6b3d1f,        // 棕红长发
+  shirt: 0xf76ea6,       // 粉上衣
+  shirtDark: 0xd44d85,
+  pants: 0xd85a92,       // 粉裤子/裙
+  shoes: 0x7a4a63,
 };
 
 function mat(color) {
@@ -37,7 +54,10 @@ export class PlayerCharacter {
     this.armorLevel = null; // 'iron' | 'diamond' | null
     this.bodyMeshes = {};
     this.armorMeshes = {};
+    this.clothParts = { hair: [], shirt: [], pants: [], shoes: [] };
+    this.gender = null; // 'boy' | 'girl'
     this._buildBody();
+    this._buildGirlExtras();
     this._held = null;
   }
 
@@ -55,7 +75,9 @@ export class PlayerCharacter {
     head.add(headMesh);
     // 头发（顶 + 后脑勺 + 两侧刘海）
     const hairTop = this._box(0.52, 0.12, 0.52, SKIN.hair); hairTop.position.y = 0.22; head.add(hairTop);
+    this.clothParts.hair.push(hairTop);
     const hairBack = this._box(0.52, 0.3, 0.1, SKIN.hair); hairBack.position.set(0, 0.02, -0.22); head.add(hairBack);
+    this.clothParts.hair.push(hairBack);
     // 眼睛（正面 +z）
     const eyeL = this._box(0.1, 0.1, 0.02, 0xffffff); eyeL.position.set(-0.11, 0.03, 0.251); head.add(eyeL);
     const eyeR = this._box(0.1, 0.1, 0.02, 0xffffff); eyeR.position.set(0.11, 0.03, 0.251); head.add(eyeR);
@@ -82,7 +104,9 @@ export class PlayerCharacter {
     const body = new THREE.Group();
     const torso = this._box(0.5, 0.75, 0.28, SKIN.shirt);
     body.add(torso);
+    this.clothParts.shirt.push(torso);
     const torsoShade = this._box(0.5, 0.2, 0.29, SKIN.shirtDark); torsoShade.position.y = -0.27; body.add(torsoShade);
+    this.clothParts.shirt.push(torsoShade);
     body.position.y = 0.9;
     g.add(body);
     this.bodyMeshes.body = body;
@@ -97,6 +121,7 @@ export class PlayerCharacter {
     // 手臂（0.2 宽 0.75 高），肩部铰链
     const armL = new THREE.Group();
     const armLmesh = this._box(0.22, 0.7, 0.24, SKIN.shirt); armLmesh.position.y = -0.35; armL.add(armLmesh);
+    this.clothParts.shirt.push(armLmesh);
     const handL = this._box(0.22, 0.16, 0.24, SKIN.skin); handL.position.y = -0.72; armL.add(handL);
     armL.position.set(-0.38, 1.22, 0);
     g.add(armL);
@@ -104,6 +129,7 @@ export class PlayerCharacter {
 
     const armR = new THREE.Group();
     const armRmesh = this._box(0.22, 0.7, 0.24, SKIN.shirt); armRmesh.position.y = -0.35; armR.add(armRmesh);
+    this.clothParts.shirt.push(armRmesh);
     const handR = this._box(0.22, 0.16, 0.24, SKIN.skin); handR.position.y = -0.72; armR.add(handR);
     armR.position.set(0.38, 1.22, 0);
     g.add(armR);
@@ -113,18 +139,20 @@ export class PlayerCharacter {
     // 腿（0.22 宽 0.8 高），髋部铰链
     const legL = new THREE.Group();
     const legLmesh = this._box(0.22, 0.72, 0.24, SKIN.pants); legLmesh.position.y = -0.36; legL.add(legLmesh);
+    this.clothParts.pants.push(legLmesh);
     const shoeL = this._box(0.22, 0.12, 0.28, SKIN.shoes); shoeL.position.set(0, -0.72, 0.02); legL.add(shoeL);
+    this.clothParts.shoes.push(shoeL);
     legL.position.set(-0.13, 0.55, 0);
     g.add(legL);
     this.bodyMeshes.legL = legL;
 
     const legR = new THREE.Group();
     const legRmesh = this._box(0.22, 0.72, 0.24, SKIN.pants); legRmesh.position.y = -0.36; legR.add(legRmesh);
+    this.clothParts.pants.push(legRmesh);
     const shoeR = this._box(0.22, 0.12, 0.28, SKIN.shoes); shoeR.position.set(0, -0.72, 0.02); legR.add(shoeR);
+    this.clothParts.shoes.push(shoeR);
     legR.position.set(0.13, 0.55, 0);
-    legR.visible = false;
     g.add(legR);
-    legR.visible = true;
     this.bodyMeshes.legR = legR;
 
     // 护腿甲（覆盖双腿前片，简化为一片）
@@ -133,6 +161,57 @@ export class PlayerCharacter {
     legsArmor.visible = false;
     g.add(legsArmor);
     this.armorMeshes.legs = legsArmor;
+  }
+
+  /** 女生专属装饰：长辫子 + 头顶蝴蝶结（默认隐藏） */
+  _buildGirlExtras() {
+    const g = this.group;
+    this.girlExtras = new THREE.Group();
+
+    // 加长后发（披肩发）
+    const longHair = this._box(0.52, 0.46, 0.12, SKIN_GIRL.hair);
+    longHair.position.set(0, 1.4, -0.24);
+    this.girlExtras.add(longHair);
+    // 两侧垂发
+    const sideL = this._box(0.1, 0.34, 0.12, SKIN_GIRL.hair);
+    sideL.position.set(-0.23, 1.46, -0.02);
+    this.girlExtras.add(sideL);
+    const sideR = this._box(0.1, 0.34, 0.12, SKIN_GIRL.hair);
+    sideR.position.set(0.23, 1.46, -0.02);
+    this.girlExtras.add(sideR);
+    // 蝴蝶结（头顶，红色小块）
+    const bowL = this._box(0.14, 0.1, 0.08, 0xff5b8a); bowL.position.set(-0.09, 1.78, 0.02); bowL.rotation.z = 0.3;
+    this.girlExtras.add(bowL);
+    const bowR = this._box(0.14, 0.1, 0.08, 0xff5b8a); bowR.position.set(0.09, 1.78, 0.02); bowR.rotation.z = -0.3;
+    this.girlExtras.add(bowR);
+    const bowMid = this._box(0.08, 0.08, 0.08, 0xe83e74); bowMid.position.set(0, 1.78, 0.02);
+    this.girlExtras.add(bowMid);
+    // 裙子（下摆一块）
+    const skirt = this._box(0.58, 0.22, 0.32, SKIN_GIRL.pants);
+    skirt.position.set(0, 0.58, 0);
+    this.girlExtras.add(skirt);
+
+    this.girlExtras.visible = false;
+    g.add(this.girlExtras);
+  }
+
+  /** 选择主角性别：'boy'（蓝宝）| 'girl'（粉嘟） */
+  setSkin(gender) {
+    this.gender = gender;
+    const pal = gender === 'girl' ? SKIN_GIRL : SKIN_BOY;
+    const recolor = (meshes, hex) => {
+      meshes.forEach((m) => { if (m && m.material) m.material.color.setHex(hex); });
+    };
+    recolor(this.clothParts.hair, pal.hair);
+    recolor(this.clothParts.shirt, pal.shirt);
+    // 上衣阴影块用 darker
+    if (this.clothParts.shirt[1]) this.clothParts.shirt[1].material.color.setHex(pal.shirtDark);
+    recolor(this.clothParts.pants, pal.pants);
+    recolor(this.clothParts.shoes, pal.shoes);
+    // 女生装饰
+    this.girlExtras.visible = (gender === 'girl');
+    // 穿裙子时裤子块改短色
+    this.clothParts.pants.forEach((m) => { if (m && m.material) m.material.color.setHex(gender === 'girl' ? SKIN_GIRL.pants : pal.pants); });
   }
 
   /** 根据快捷栏内容决定盔甲：含胸甲→全身，头盔单独等 */

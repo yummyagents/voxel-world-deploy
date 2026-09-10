@@ -163,9 +163,14 @@ export class Portfolio {
   }
 
   close() {
+    if (!this.isOpen) return;
     this.isOpen = false;
     this._el.style.display = 'none';
     this._closeLightbox();
+    if (typeof this.onClose === 'function') {
+      const cb = this.onClose; this.onClose = null;
+      try { cb(); } catch (e) { console.warn(e); }
+    }
   }
 
   toggle() { this.isOpen ? this.close() : this.open(); }
@@ -221,19 +226,36 @@ export class Portfolio {
     this._el.querySelector('.portfolio-lightbox').style.display = 'none';
   }
 
-  _downloadCurrent() {
+  async _downloadCurrent() {
     const p = this.photos.find((x) => x.id === this._currentId);
     if (!p) return;
-    const a = document.createElement('a');
-    a.href = p.dataUrl;
-    a.download = `${p.title || 'minecraft-photo'}.jpg`;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
+    const filename = `${(p.title || 'minecraft-photo').replace(/[\\/:*?"<>|]/g, '_')}.jpg`;
+    // 用 fetch + blob 下载，兼容手机浏览器和跨域 dataURL
+    try {
+      const resp = await fetch(p.dataUrl);
+      const blob = await resp.blob();
+      const blobUrl = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = blobUrl;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(blobUrl), 4000);
+    } catch (e) {
+      // 兜底：直接用 a 标签
+      const a = document.createElement('a');
+      a.href = p.dataUrl;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+    }
   }
 
   _deleteCurrent() {
     if (!this._currentId) return;
+    if (!confirm('确定要删掉这张照片吗？删掉就找不回来啦。')) return;
     this.photos = this.photos.filter((x) => x.id !== this._currentId);
     this._save();
     this._closeLightbox();

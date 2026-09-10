@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { SimplexNoise } from './noise.js?v=20260917b';
+import { SimplexNoise } from './noise.js?v=20260922a';
 
 /* ============================================
    常量

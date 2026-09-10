@@ -35,13 +35,14 @@ export class Tutorial {
     const el = document.createElement('div');
     el.className = 'tutorial-panel';
     el.innerHTML = `
-      <button class="tu-close" aria-label="关闭引导" title="关闭引导">✕</button>
+      <button class="tu-close" aria-label="关闭引导" title="关闭引导（电脑也可按 H 键）">✕</button>
       <div class="tu-bunny">🐰</div>
       <div class="tu-body">
         <div class="tu-title"></div>
         <div class="tu-text"></div>
         <div class="tu-progress"></div>
-      </div>`;
+      </div>
+      <div class="tu-hint">电脑按 <b>H</b> 键可收起/重开 · 手机点右上角 ✕</div>`;
     document.body.appendChild(el);
     this.el = el;
     this.titleEl = el.querySelector('.tu-title');
@@ -146,7 +147,7 @@ export class Tutorial {
     if (this.step >= TUTORIAL_STEPS.length - 1) {
       this.completed = true;
       this.sound.allDone();
-      setTimeout(() => this.dismiss(), 8000);
+      setTimeout(() => this.dismiss(), 6000);
     }
     this._render();
   }

@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
   <meta name="description" content="像素方块世界 - 3D像素风格方块世界探索游戏" />
-  <title>像素方块世界</title>
+  <title>美味特工队 · 像素方块训练基地</title>
   <link rel="stylesheet" href="./styles/main.css" />
   <!-- 使用 importmap 引入 Three.js ES Module -->
   <script type="importmap">
@@ -42,7 +42,8 @@
       <div class="control-row"><span class="key">鼠标</span><span>视角旋转</span></div>
       <div class="control-row"><span class="key">左键</span><span>放置方块</span></div>
       <div class="control-row"><span class="key">右键</span><span>破坏方块</span></div>
-      <div class="control-row"><span class="key">空格</span><span>跳跃</span></div>
+      <div class="control-row"><span class="key">空格</span><span>跳跃 / 水中上浮</span></div>
+      <div class="control-row"><span class="key">双击空格</span><span>切换飞行（空格上升 / Shift 下降）</span></div>
       <div class="control-row"><span class="key">1-9</span><span>选择快捷栏</span></div>
       <div class="control-row"><span class="key">E</span><span>打开创造背包（选方块放入快捷栏）</span></div>
       <div class="control-row"><span class="key">G</span><span>装备兑换（床、家具、生活用品）</span></div>
@@ -52,6 +53,9 @@
       <div class="control-row"><span class="key">T</span><span>切换天气（晴/雨/雪）</span></div>
       <div class="control-row"><span class="key">C</span><span>📷 拍照存入作品集</span></div>
       <div class="control-row"><span class="key">P</span><span>🖼 打开作品集相册</span></div>
+      <div class="control-row"><span class="key">H</span><span>收起/重开新手提示</span></div>
+      <div class="control-row"><span class="key">F</span><span>小彩蛋（试试看～）</span></div>
+      <div class="control-row"><span class="key">Ctrl+S</span><span>💾 立即手动保存（也会自动保存）</span></div>
       <div class="control-row"><span class="key">ESC</span><span>暂停</span></div>
     </div>
   </div>
@@ -70,9 +74,56 @@
 
   <!-- 开始界面 -->
   <div id="startScreen">
-    <div class="start-title">像素方块世界</div>
-    <div class="start-subtitle">VOXEL BLOCK WORLD</div>
-    <div class="start-hint">点击开始游戏</div>
+    <div class="start-hero">
+      <div class="start-brand"><span class="brand-cube"></span>美味特工队 · YUMMY AGENTS 出品</div>
+
+      <div class="logo-lockup">
+        <div class="logo-cube" aria-hidden="true">
+          <div class="cube-face cube-top"></div>
+          <div class="cube-face cube-left"></div>
+          <div class="cube-face cube-right"></div>
+          <div class="cube-eyes"><i></i><i></i></div>
+        </div>
+        <h1 class="game-logo"><span class="logo-zh">像素方块世界</span></h1>
+        <div class="logo-en">PIXEL&nbsp;BLOCK&nbsp;WORLD</div>
+        <div class="logo-rule"><span></span><em>像素方块训练基地</em><span></span></div>
+      </div>
+
+      <div class="start-welcome">欢迎来到美味特工队像素方块基地！<br>自由建造 · 探索世界 · 和小动物做朋友～</div>
+
+      <!-- 主角选择 -->
+      <div class="char-select">
+        <div class="char-select-label">选择你的小探险家</div>
+        <div class="char-options">
+          <button class="char-card" data-char="boy" type="button">
+            <span class="char-avatar avatar-boy">
+              <span class="ca-hair"></span>
+              <span class="ca-face"><i class="ca-eye"></i><i class="ca-eye"></i><b class="ca-smile"></b></span>
+              <span class="ca-shirt ca-shirt-boy"></span>
+              <span class="ca-leg ca-leg-boy"></span>
+            </span>
+            <span class="char-name">蓝宝</span>
+            <span class="char-check">✓</span>
+          </button>
+          <button class="char-card" data-char="girl" type="button">
+            <span class="char-avatar avatar-girl">
+              <span class="ca-hair ca-hair-girl"></span>
+              <span class="ca-face"><i class="ca-eye"></i><i class="ca-eye"></i><b class="ca-smile"></b></span>
+              <span class="ca-shirt ca-shirt-girl"></span>
+              <span class="ca-bow">🎀</span>
+              <span class="ca-leg ca-leg-girl"></span>
+            </span>
+            <span class="char-name">粉嘟</span>
+            <span class="char-check">✓</span>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <div class="start-hint">⬇ 点击开始游戏 ⬇</div>
+
+    <!-- 社区功能挂载点（访客计数 / 点赞 / 留言，需在 js/config.js 填好 Supabase 后显示） -->
+    <div id="communityMount"></div>
 
     <!-- 存档菜单 -->
     <div class="save-menu" id="saveMenu">
@@ -87,11 +138,13 @@
       <h3>操作说明</h3>
       <div class="control-row"><span class="key">W A S D</span><span>移动</span></div>
       <div class="control-row"><span class="key">鼠标</span><span>视角旋转</span></div>
-      <div class="control-row"><span class="key">空格</span><span>跳跃</span></div>
+      <div class="control-row"><span class="key">空格</span><span>跳跃 / 水中上浮</span></div>
+      <div class="control-row"><span class="key">双击空格</span><span>切换飞行（空格上升 / Shift 下降）</span></div>
       <div class="control-row"><span class="key">左键</span><span>放置方块</span></div>
       <div class="control-row"><span class="key">右键</span><span>破坏方块（掉落物品）</span></div>
       <div class="control-row"><span class="key">1-8</span><span>选择方块</span></div>
       <div class="control-row"><span class="key">9</span><span>吸引/收集掉落物</span></div>
+      <div class="control-row"><span class="key">E</span><span>打开创造背包（选方块）</span></div>
       <div class="control-row"><span class="key">滚轮/Shift+滚轮</span><span>切换方块（含矿石/建材）</span></div>
       <div class="control-row"><span class="key">T</span><span>切换天气</span></div>
       <div class="control-row"><span class="key">V</span><span>切换第一/第三人称</span></div>
@@ -100,11 +153,14 @@
       <div class="control-row"><span class="key">P</span><span>打开作品集相册</span></div>
       <div class="control-row"><span class="key">H</span><span>关闭/重开新手提示</span></div>
       <div class="control-row"><span class="key">F</span><span>小彩蛋（试试看～）</span></div>
+      <div class="control-row"><span class="key">Ctrl+S</span><span>💾 立即手动保存（游戏也会自动保存）</span></div>
       <div class="control-row"><span class="key">ESC</span><span>暂停</span></div>
       <div class="control-row"><span class="key">= / Ctrl+滚轮上</span><span>放大画面</span></div>
       <div class="control-row"><span class="key">- / Ctrl+滚轮下</span><span>缩小画面</span></div>
       <div class="control-row"><span class="key">0</span><span>重置视野</span></div>
     </div>
+
+    <a class="admin-link" href="./admin.html" target="_blank" rel="noopener" onclick="event.stopPropagation()">🔒 妈妈留言审核台</a>
   </div>
 
   <!-- 移动端触控 UI -->
@@ -119,11 +175,37 @@
       <button id="btnBreak" class="action-btn">拆</button>
       <button id="btnPlace" class="action-btn">放</button>
     </div>
+
+    <!-- 移动端功能菜单（⋯ 展开，对应键盘上的各种功能键） -->
+    <button id="mMenuBtn" class="m-menu-btn" type="button">⋯</button>
+    <div id="mMenuPanel" class="m-menu-panel">
+      <button class="m-fn" data-fn="photo" type="button">📷<span>拍照</span></button>
+      <button class="m-fn" data-fn="album" type="button">🖼️<span>相册</span></button>
+      <button class="m-fn" data-fn="inventory" type="button">🎒<span>背包</span></button>
+      <button class="m-fn" data-fn="shop" type="button">🛒<span>商店</span></button>
+      <button class="m-fn" data-fn="view" type="button">👁️<span>视角</span></button>
+      <button class="m-fn" data-fn="fly" type="button">🕊️<span>飞行</span></button>
+      <button class="m-fn" data-fn="weather" type="button">🌦️<span>天气</span></button>
+      <button class="m-fn" data-fn="help" type="button">❓<span>说明</span></button>
+    </div>
+
     <!-- 移动端方块选择栏 -->
     <div id="mobileHotbar"></div>
   </div>
 
   <!-- 游戏主模块 -->
-  <script type="module" src="./js/game.js?v=20260917b"></script>
+  <!-- Supabase 浏览器库（本地自包含，用于访客计数/点赞/留言） -->
+  <script src="./js/lib/supabase.umd.js"></script>
+
+  <!-- 社区功能引导（开始界面的计数/点赞/留言） -->
+  <script type="module">
+    import { Community } from './js/community.js?v=20260922a';
+    try {
+      const mount = document.getElementById('communityMount');
+      if (mount) { const c = new Community(); c.mount(mount); }
+    } catch (e) { console.warn('[community] 加载失败', e); }
+  </script>
+
+  <script type="module" src="./js/game.js?v=20260922a"></script>
 </body>
 </html>

@@ -8,26 +8,26 @@ import {
   World, Chunk, BlockType, BlockNames, isSolid,
   CHUNK_SIZE, CHUNK_HEIGHT, RENDER_DISTANCE, getBlockColor,
   isMobileDevice, getRenderDistance, getBlockDrop, BiomeNames, Biome,
-} from './voxel.js?v=20260917b';
-import { AnimalManager, Sheep, Rabbit, Horse, Cow, Pig, Chicken, Villager, IronGolem } from './animals.js?v=20260917b';
-import { WeatherSystem, WeatherType, WeatherNames } from './weather.js?v=20260917b';
-import { DayNightCycle } from './daynight.js?v=20260917b';
-import { DropManager } from './drops.js?v=20260917b';
-import { VillageGenerator } from './village.js?v=20260917b';
-import { Inventory } from './inventory.js?v=20260917b';
-import { ExchangeShop } from './exchange.js?v=20260917b';
-import { createHeldModel, createArmModel, ItemNames, getItemIcon } from './equipment.js?v=20260917b';
-import { StructureGenerator } from './structures.js?v=20260917b';
-import { PlayerCharacter } from './player-character.js?v=20260917b';
-import { SakuraPetals } from './sakura.js?v=20260917b';
-import { BirdManager } from './birds.js?v=20260917b';
-import { SoundFX } from './audio.js?v=20260917b';
-import { Tutorial } from './tutorial.js?v=20260917b';
+} from './voxel.js?v=20260922a';
+import { AnimalManager, Sheep, Rabbit, Horse, Cow, Pig, Chicken, Villager, IronGolem } from './animals.js?v=20260922a';
+import { WeatherSystem, WeatherType, WeatherNames } from './weather.js?v=20260922a';
+import { DayNightCycle } from './daynight.js?v=20260922a';
+import { DropManager } from './drops.js?v=20260922a';
+import { VillageGenerator } from './village.js?v=20260922a';
+import { Inventory } from './inventory.js?v=20260922a';
+import { ExchangeShop } from './exchange.js?v=20260922a';
+import { createHeldModel, createArmModel, ItemNames, getItemIcon } from './equipment.js?v=20260922a';
+import { StructureGenerator } from './structures.js?v=20260922a';
+import { PlayerCharacter } from './player-character.js?v=20260922a';
+import { SakuraPetals } from './sakura.js?v=20260922a';
+import { BirdManager } from './birds.js?v=20260922a';
+import { SoundFX } from './audio.js?v=20260922a';
+import { Tutorial } from './tutorial.js?v=20260922a';
 import {
   loadSave, writeSave, clearSave, hasSave,
   exportSave, importSave,
-} from './save.js?v=20260917b';
-import { Portfolio } from './portfolio.js?v=20260917b';
+} from './save.js?v=20260922a';
+import { Portfolio } from './portfolio.js?v=20260922a';
 
 /* ============================================
    玩家类 - 第一人称角色控制
@@ -760,9 +760,14 @@ class Game {
 
     // 无存档时：出生在固定手工"新手家园"（世界原点），家园半径 30 大平地
     this._isNewHome = (!this.saveData || !this.saveData.player);
-    // 出生区块中心：新世界固定原点（家园中心）
-    const spCx = 0;
-    const spCz = 0;
+    // 出生区块中心：新世界固定原点（家园中心）；读档则以上次所在位置为中心预生成地形
+    let centerX = 0.5, centerZ = 16.5;
+    if (this.saveData && this.saveData.player) {
+      centerX = this.saveData.player.x;
+      centerZ = this.saveData.player.z;
+    }
+    const spCx = Math.floor(centerX / 16);
+    const spCz = Math.floor(centerZ / 16);
 
     const radius = this.renderDistance;
 
@@ -826,10 +831,21 @@ class Game {
     this._spawnY = 28;
     if (this.saveData && this.saveData.player) {
       this._spawnX = this.saveData.player.x;
-      this._spawnY = this.saveData.player.y;
       this._spawnZ = this.saveData.player.z;
+      // 该位置地形此刻已预生成，把玩家稳稳放到地表上方 2 格，避免旧高度导致下坠/错位
+      try {
+        const groundY = this.world.getSurfaceHeight(Math.floor(this._spawnX), Math.floor(this._spawnZ));
+        if (Number.isFinite(groundY) && groundY > 0) {
+          this._spawnY = groundY + 2;
+        } else {
+          this._spawnY = this.saveData.player.y;
+        }
+      } catch (_) {
+        this._spawnY = this.saveData.player.y;
+      }
     }
     this.player.position.set(this._spawnX, this._spawnY, this._spawnZ);
+    this.player.velocity.set(0, 0, 0);
     this.player.yaw = (this.saveData && this.saveData.player && typeof this.saveData.player.yaw === 'number')
       ? this.saveData.player.yaw : Math.PI;    this.player.pitch = (this.saveData && this.saveData.player && typeof this.saveData.player.pitch === 'number')
       ? this.saveData.player.pitch : -0.2;
@@ -911,6 +927,7 @@ class Game {
         z: Math.round(p.z * 100) / 100,
         yaw: this.player.yaw,
         pitch: this.player.pitch,
+        character: this.character || 'boy',
       },
       hotbar: (this.inventory ? this.inventory.hotbar : []).slice(0, 9),
       selectedSlot: this.selectedSlot,
@@ -930,12 +947,26 @@ class Game {
   /** 标记有改动需要保存 */
   _markSaveDirty() { this._saveDirty = true; }
 
-  /** 自动保存调度（每 20 秒，若有改动）+ 切走页面时保存 */
+  /** 玩家放/拆方块后调度一次保存（去抖 1 秒，避免连续操作频繁写存储） */
+  _scheduleSave() {
+    this._saveDirty = true;
+    if (this._saveDebounce) clearTimeout(this._saveDebounce);
+    this._saveDebounce = setTimeout(() => {
+      this._saveDebounce = null;
+      if (this.world) this.saveNow(false);
+    }, 1000);
+  }
+
+  /** 自动保存调度（每 5 秒检查，若有改动则存）+ 位置每 3 秒随动存档 */
   _tickSave(dt) {
     this._saveTimer += dt;
-    if (this._saveTimer >= 20) {
+    if (this._saveTimer >= 5) {
       this._saveTimer = 0;
-      if (this._saveDirty) this.saveNow(false);
+      // 有方块改动、或玩家位置发生变化时都保存（保证退出后回到原地）
+      if (this._saveDirty || this._playerMoved) {
+        this._playerMoved = false;
+        if (this.world) this.saveNow(false);
+      }
     }
   }
 
@@ -983,9 +1014,54 @@ class Game {
     document.body.appendChild(albumBtn);
     albumBtn.addEventListener('click', (e) => {
       e.stopPropagation();
-      if (document.pointerLockElement) document.exitPointerLock();
-      this.portfolio.open();
+      this._openMenu(() => this.portfolio.open(), () => this.portfolio.close());
     });
+  }
+
+  /**
+   * 打开一个"覆盖式菜单"（背包/商店/相册）。
+   * 统一处理：退出指针锁定、抑制暂停菜单弹出；关闭后自动恢复鼠标锁定。
+   * @param {Function} openFn 真正打开面板的函数
+   * @param {Function|null} closeFn 面板关闭时的回调（可选）
+   */
+  _openMenu(openFn, closeFn = null) {
+    // 先同步打开面板、挂好关闭回调，再退出指针锁定
+    try {
+      openFn && openFn();
+      this.ui.pauseScreen.style.display = 'none';
+    } catch (err) {
+      console.error('[菜单] 打开失败：', err);
+      return;
+    }
+    // 标记当前有覆盖菜单打开（供 pointerlockchange 判断）
+    this._menuOpen = true;
+    // 关闭后：清除标记并回到游戏（桌面端重新锁定鼠标）
+    const closeHandler = () => {
+      this._menuOpen = false;
+      closeFn && closeFn();
+      if (!this.isMobile && this.isRunning && !document.pointerLockElement
+          && !this._anyMenuOpen()) {
+        try { this.canvas.requestPointerLock(); } catch (e) { /* 忽略 */ }
+      }
+    };
+    this._menuCloseFn = closeHandler;
+    // 把关闭回调挂到刚打开的面板上（点遮罩/X/内部ESC 关闭时触发）
+    try {
+      for (const p of [this.inventory, this.shop, this.portfolio]) {
+        if (p && p.isOpen) { p.onClose = closeHandler; break; }
+      }
+    } catch (e) { /* 忽略 */ }
+    // 抑制本次退出锁定可能带来的"暂停菜单"弹出（双保险）
+    this._suppressPause = true;
+    if (document.pointerLockElement) document.exitPointerLock();
+    setTimeout(() => { this._suppressPause = false; }, 300);
+  }
+
+  /** 是否有任何覆盖菜单仍处于打开状态 */
+  _anyMenuOpen() {
+    return (this.inventory && this.inventory.isOpen)
+      || (this.shop && this.shop.isOpen)
+      || (this.portfolio && this.portfolio.isOpen);
   }
 
   /** 打开装备兑换商店（懒创建 + 容错，确保 G 键始终可用） */
@@ -999,18 +1075,28 @@ class Game {
         };
       }
       if (this.inventory) this.shop.inventory = this.inventory;
-      this.shop.toggle();
+      // 未打开则走统一菜单流程（抑制暂停菜单 + 退出指针锁定）；已打开则 close() 会触发 onClose 恢复
+      if (!this.shop.isOpen) {
+        this._openMenu(() => this.shop.open(), () => this.shop.close());
+      } else {
+        this.shop.close();
+      }
       this.sound && this.sound.click();
     } catch (err) {
       console.error('[商店] 打开失败：', err);
+      this._suppressPause = false;
       this._toast('商店打开失败，请刷新重试');
     }
   }
 
   /** 拍摄当前场景 */
   takePhoto() {
+    // 懒初始化：即使初始化阶段未成功，拍照时也补建相册
+    if (!this.portfolio) {
+      try { this._initPortfolio(); } catch (e) { console.error('[相册] 初始化失败', e); }
+    }
     if (!this.portfolio || !this.renderer) {
-      this._toast('相机还没准备好，请先进到游戏世界里');
+      this._toast('相机还没准备好，请刷新页面后重试');
       return;
     }
     // 拍前渲染一帧保证画面最新
@@ -1120,9 +1206,13 @@ class Game {
   /** 存档相关按钮与事件 */
   _initSaveUI() {
     const autoSave = () => {
-      if (this.world) this.saveNow(false);
+      if (this.world) {
+        // 强制保存当前位置 + 改动，确保随时关掉都不丢进度
+        try { writeSave(this._collectSaveData()); } catch (e) { console.warn('[save] 自动保存失败', e); }
+      }
     };
     window.addEventListener('beforeunload', autoSave);
+    window.addEventListener('pagehide', autoSave);
     document.addEventListener('visibilitychange', () => {
       if (document.visibilityState === 'hidden') autoSave();
     });
@@ -1171,6 +1261,11 @@ class Game {
       });
     }
 
+    // 开始界面：主角选择（男生蓝宝 / 女生粉嘟）
+    this._initCharSelect();
+    // 移动端功能菜单（⋯）
+    if (this.isMobile) this._initMobileMenu();
+
     // 游戏内快捷键：Ctrl+S 手动保存
     document.addEventListener('keydown', (e) => {
       if ((e.ctrlKey || e.metaKey) && (e.code === 'KeyS')) {
@@ -1178,6 +1273,148 @@ class Game {
         if (this.world) this.saveNow(true);
       }
     });
+  }
+
+  /** 读取当前选择的主角性别（开始前后都可用）：优先独立本地存储，其次存档 */
+  _getSelectedChar() {
+    try {
+      const c = localStorage.getItem('voxel_character_v1');
+      if (c === 'girl' || c === 'boy') return c;
+    } catch (e) {}
+    return this.saveData?.player?.character === 'girl' ? 'girl' : 'boy';
+  }
+
+  /** 开始界面主角选择（男生蓝宝 / 女生粉嘟），选择立即写入本地保存 */
+  _initCharSelect() {
+    this.character = this._getSelectedChar();
+    const cards = document.querySelectorAll('.char-card');
+    if (!cards.length) return;
+    const apply = (gender, silent) => {
+      this.character = gender;
+      cards.forEach((c) => {
+        const on = c.dataset.char === gender;
+        c.classList.toggle('selected', on);
+        if (on) { c.setAttribute('aria-pressed', 'true'); } else { c.setAttribute('aria-pressed', 'false'); }
+      });
+      // 第三人称角色实时换装
+      if (this.playerChar) this.playerChar.setSkin(gender);
+      // 立即持久化（开始游戏前也能记住），并同步到游戏存档
+      try { localStorage.setItem('voxel_character_v1', gender); } catch (e) {}
+      if (this.saveData) {
+        this.saveData.player = this.saveData.player || {};
+        this.saveData.player.character = gender;
+      }
+      try { if (this.player) this._scheduleSave(); } catch (e) {}
+      if (!silent) { try { this.sound && this.sound.click && this.sound.click(); } catch (e) {} }
+    };
+    cards.forEach((c) => {
+      // 同时支持 click 与 touchstart（手机端更跟手），并阻止冒泡触发“开始游戏”
+      const onPick = (e) => { e.stopPropagation(); e.preventDefault(); apply(c.dataset.char); };
+      c.addEventListener('click', onPick);
+      c.addEventListener('touchstart', onPick, { passive: false });
+    });
+    apply(this.character, true);
+  }
+
+  /** 移动端「⋯」功能菜单：把键盘上的功能键变成可点按钮 */
+  _initMobileMenu() {
+    const btn = document.getElementById('mMenuBtn');
+    const panel = document.getElementById('mMenuPanel');
+    if (!btn || !panel) return;
+
+    const closePanel = () => { panel.classList.remove('open'); };
+    const togglePanel = (e) => {
+      e.stopPropagation();
+      e.preventDefault();
+      panel.classList.toggle('open');
+    };
+    btn.addEventListener('click', togglePanel);
+    btn.addEventListener('touchstart', togglePanel, { passive: false });
+    // 点其它地方收起菜单
+    document.addEventListener('touchstart', (e) => {
+      if (panel.classList.contains('open') && !panel.contains(e.target) && e.target !== btn) closePanel();
+    });
+
+    panel.querySelectorAll('.m-fn').forEach((b) => {
+      const fire = (e) => {
+        e.stopPropagation();
+        e.preventDefault();
+        this._mobileAction(b.dataset.fn);
+        closePanel();
+      };
+      b.addEventListener('click', fire);
+      b.addEventListener('touchstart', fire, { passive: false });
+    });
+  }
+
+  /** 移动端功能按钮对应的动作（复用键盘逻辑） */
+  _mobileAction(fn) {
+    if (!this.isRunning && fn !== 'help') return;
+    try {
+      switch (fn) {
+        case 'photo':
+          this.takePhoto();
+          break;
+        case 'album':
+          if (!this.portfolio) { try { this._initPortfolio(); } catch (err) { console.error(err); } }
+          if (this.portfolio) {
+            if (!this.portfolio.isOpen) this._openMenu(() => this.portfolio.open(), () => this.portfolio.close());
+            else if (this._menuCloseFn) this._menuCloseFn();
+          }
+          break;
+        case 'inventory':
+          if (this.inventory && !this.inventory.isOpen) this._openMenu(() => this.inventory.open(), () => this.inventory.close());
+          else if (this._menuCloseFn) this._menuCloseFn();
+          break;
+        case 'shop':
+          if (this.shop && this.shop.isOpen && this._menuCloseFn) { this._menuCloseFn(); }
+          else this._openShop();
+          break;
+        case 'view':
+          this.toggleView();
+          break;
+        case 'fly':
+          this.player.flying = !this.player.flying;
+          if (this.player.flying) { this.player.velocity.y = 0; }
+          this._toast(this.player.flying ? '🕊️ 飞行模式已开启（跳=上升，下蹲=下降）' : '已降落');
+          this._scheduleSave();
+          break;
+        case 'weather':
+          if (this.weather) {
+            const order = [WeatherType.CLEAR, WeatherType.RAIN, WeatherType.SNOW];
+            const idx = order.indexOf(this.weather.currentWeather);
+            this.weather.setWeather(order[(idx + 1) % order.length]);
+          }
+          break;
+        case 'help':
+          this._toggleHelpMobile();
+          break;
+      }
+    } catch (err) {
+      console.warn('[mobile-menu] 动作失败', fn, err);
+    }
+  }
+
+  /** 移动端简易说明弹层 */
+  _toggleHelpMobile() {
+    let el = document.getElementById('mHelpPanel');
+    if (el) { el.remove(); return; }
+    el = document.createElement('div');
+    el.id = 'mHelpPanel';
+    el.className = 'm-help-panel';
+    el.innerHTML = `
+      <div class="m-help-card">
+        <div class="m-help-title">操作说明</div>
+        <div class="m-help-row">🕹️ 左下摇杆：移动</div>
+        <div class="m-help-row">👆 右侧空白处拖动：转视角</div>
+        <div class="m-help-row">跳 / 拆 / 放：右侧三个按钮</div>
+        <div class="m-help-row">底部方块栏：点选要放的方块</div>
+        <div class="m-help-row">📷 拍照　🖼️ 相册　🎒 背包</div>
+        <div class="m-help-row">🛒 商店　👁️ 切视角　🕊️ 飞行　🌦️ 天气</div>
+        <button class="m-help-ok" type="button">知道啦</button>
+      </div>`;
+    document.body.appendChild(el);
+    el.addEventListener('click', (e) => { e.stopPropagation(); if (e.target === el || e.target.classList.contains('m-help-ok')) el.remove(); });
   }
 
   /** 创建区块 */
@@ -1304,6 +1541,7 @@ class Game {
     // 第三人称完整角色（V 键切换）
     this.viewMode = 'first'; // 'first' | 'third'
     this.playerChar = new PlayerCharacter(this.scene);
+    this.playerChar.setSkin(this._getSelectedChar());
     this.camDist = 4.2;
   }
 
@@ -1411,8 +1649,8 @@ class Game {
     this.player = new Player(this.camera, this.world);
     this.player.dropManager = this.dropManager;
     // 放/拆方块：音效 + 新手引导进度（此时 player 与 sound 均已就绪）
-    this.player.onPlace = () => { if (this.sound) this.sound.place(); if (this.tutorial) this.tutorial.notifyPlace(); };
-    this.player.onBreak = () => { if (this.sound) this.sound.break(); if (this.tutorial) this.tutorial.notifyBreak(); };
+    this.player.onPlace = () => { if (this.sound) this.sound.place(); if (this.tutorial) this.tutorial.notifyPlace(); this._scheduleSave(); };
+    this.player.onBreak = () => { if (this.sound) this.sound.break(); if (this.tutorial) this.tutorial.notifyBreak(); this._scheduleSave(); };
   }
 
   /** 初始化方块高亮 */
@@ -1598,16 +1836,28 @@ class Game {
   _initEvents() {
     // 键盘事件（桌面端 + 移动端外接键盘通用）
     document.addEventListener('keydown', (e) => {
-      // 兑换商店打开时吞掉按键（仅 ESC 关闭；G 键由商店模块自身切换）
+      // 在输入框/文本域打字时（如开始界面留言），不把按键传给游戏
+      const tag = (document.activeElement && document.activeElement.tagName) || '';
+      if (tag === 'INPUT' || tag === 'TEXTAREA') {
+        if (e.code === 'Escape' && document.activeElement) document.activeElement.blur();
+        return;
+      }
+      // 相册打开时：ESC 关闭
+      if (this.portfolio && this.portfolio.isOpen) {
+        if (e.code === 'Escape') this.portfolio.close();
+        e.preventDefault();
+        return;
+      }
+      // 兑换商店打开时吞掉按键（仅 ESC/G 关闭）
       if (this.shop && this.shop.isOpen) {
-        if (e.code === 'Escape') this.shop.close();
+        if (e.code === 'Escape' || e.code === 'KeyG') this.shop.close();
         e.preventDefault();
         return;
       }
       // 背包打开时吞掉移动/数字键，避免背后移动
       if (this.inventory && this.inventory.isOpen) {
         if (e.code === 'KeyE' || e.code === 'Escape') {
-          this.inventory.close();
+          this.inventory.close(); // close() 内部会触发 onClose 恢复鼠标
         }
         e.preventDefault();
         return;
@@ -1636,15 +1886,13 @@ class Game {
 
       // E 打开背包（桌面端需要先退出指针锁定）
       if (e.code === 'KeyE' && this.inventory) {
-        if (document.pointerLockElement) document.exitPointerLock();
-        this.inventory.open();
+        this._openMenu(() => this.inventory.open(), () => this.inventory.close());
         e.preventDefault();
         return;
       }
 
       // G 打开装备兑换商店
       if (e.code === 'KeyG') {
-        if (document.pointerLockElement) document.exitPointerLock();
         if (this.inventory && this.inventory.isOpen) this.inventory.close();
         this._openShop();
         e.preventDefault();
@@ -1695,9 +1943,19 @@ class Game {
       }
 
       // P 键打开作品集相册
-      if (e.code === 'KeyP' && this.portfolio) {
-        if (document.pointerLockElement) document.exitPointerLock();
-        this.portfolio.toggle();
+      if (e.code === 'KeyP') {
+        if (!this.portfolio) {
+          try { this._initPortfolio(); } catch (err) { console.error('[相册] 初始化失败', err); }
+        }
+        if (this.portfolio) {
+          if (!this.portfolio.isOpen) {
+            this._openMenu(() => this.portfolio.open(), () => this.portfolio.close());
+          } else {
+            this.portfolio.close();
+          }
+        }
+        e.preventDefault();
+        return;
       }
 
       // H 键：关闭 / 重开新手教程面板（指针锁定时也能用，无需解放鼠标）
@@ -1778,7 +2036,8 @@ class Game {
         if (this.isPointerLocked) {
           this.ui.pauseScreen.style.display = 'none';
           this._showGameUI(true);
-        } else if (this.isRunning) {
+        } else if (this.isRunning && !this._suppressPause && !this._menuOpen && !this._anyMenuOpen()) {
+          // 真正失去焦点（非打开背包/商店/相册）时才显示暂停菜单
           this.ui.pauseScreen.style.display = 'flex';
         }
       });
@@ -2070,7 +2329,21 @@ class Game {
       this.heldGroup.rotation.x = swingRot;
     }
 
-    // 自动存档（每 20 秒，仅有改动时）
+    // 玩家移动时标记位置需要保存（用于退出后回到原地）
+    if (this.isRunning && this.player) {
+      const pm = this.player.position;
+      if (this._lastSaveX === undefined) {
+        this._lastSaveX = pm.x; this._lastSaveY = pm.y; this._lastSaveZ = pm.z;
+      } else {
+        const ddx = pm.x - this._lastSaveX, ddz = pm.z - this._lastSaveZ;
+        if (ddx * ddx + ddz * ddz > 1.0) { // 移动超过约 1 格
+          this._playerMoved = true;
+          this._lastSaveX = pm.x; this._lastSaveZ = pm.z;
+        }
+      }
+    }
+
+    // 自动存档（放/拆后去抖保存 + 每 5 秒位置/改动检查）
     this._tickSave(dt);
 
     // 彩蛋粒子（庆祝撒花）

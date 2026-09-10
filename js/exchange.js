@@ -1,5 +1,5 @@
-import { BlockType, BlockNames, BLOCK_TEXTURES, createBlockTexture, ATLAS_COLS, TEX_SIZE } from './voxel.js?v=20260917b';
-import { ItemType, ItemNames, getItemIcon } from './equipment.js?v=20260917b';
+import { BlockType, BlockNames, BLOCK_TEXTURES, createBlockTexture, ATLAS_COLS, TEX_SIZE } from './voxel.js?v=20260922a';
+import { ItemType, ItemNames, getItemIcon } from './equipment.js?v=20260922a';
 
 /**
  * 装备兑换 / 商店：
@@ -175,22 +175,17 @@ export class ExchangeShop {
   open() {
     this.isOpen = true;
     this.overlay.style.display = 'flex';
-    if (document.pointerLockElement) document.exitPointerLock();
   }
 
   close() {
+    if (!this.isOpen) return;
     this.isOpen = false;
     this.overlay.style.display = 'none';
+    if (typeof this.onClose === 'function') {
+      const cb = this.onClose; this.onClose = null;
+      try { cb(); } catch (e) { console.warn(e); }
+    }
   }
 
   toggle() { this.isOpen ? this.close() : this.open(); }
-
-  _bindKeys() {
-    document.addEventListener('keydown', (e) => {
-      if (e.code === 'KeyG') {
-        e.preventDefault();
-        this.toggle();
-      }
-    });
-  }
 }

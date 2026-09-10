@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>留言审核 · 妈妈管理台</title>
+  <link rel="stylesheet" href="./styles/main.css" />
+  <script src="./js/lib/supabase.umd.js"></script>
+</head>
+<body class="admin-body">
+  <div class="admin-wrap">
+    <h1>💌 留言审核台（妈妈专用）</h1>
+    <p style="font-size:13px;color:#9aa;line-height:1.7">
+      在下方填入 Supabase 项目的 <b>Project URL</b> 和 <b>service_role</b> 密钥。
+      service_role 密钥拥有最高权限，<b>只在本机审核时使用，不要发给任何人、不要填到游戏网页里</b>。
+      密钥只保存在你这台设备的浏览器中（localStorage），不会外传。
+    </p>
+    <div class="admin-row">
+      <input id="url" type="text" placeholder="Project URL，如 https://xxxxx.supabase.co" />
+    </div>
+    <div class="admin-row">
+      <input id="key" type="password" placeholder="service_role 密钥（在 Settings → API → service_role）" />
+    </div>
+    <div class="admin-row">
+      <button id="connect">连接并读取留言</button>
+      <span id="status" style="font-size:13px;color:#9aa;align-self:center"></span>
+    </div>
+    <hr style="border-color:#333;margin:16px 0" />
+    <div id="list"></div>
+  </div>
+
+  <script>
+    const $ = (id) => document.getElementById(id);
+    let client = null;
+
+    function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+    function fmtTime(t){try{return new Date(t).toLocaleString('zh-CN');}catch(e){return t||'';}}
+
+    function saved(){
+      try{return {u:localStorage.getItem('voxel_admin_url')||'',k:localStorage.getItem('voxel_admin_key')||''};}catch(e){return {u:'',k:''};}
+    }
+    function saveCreds(u,k){try{localStorage.setItem('voxel_admin_url',u);localStorage.setItem('voxel_admin_key',k);}catch(e){}}
+
+    async function load(){
+      // 容错：自动去掉末尾多余的 /rest/v1、斜杠和空格，用户贴完整接口地址也能识别
+      let url = $('url').value.trim();
+      url = url.replace(/\/rest\/v1\/?$/i,'').replace(/\/+$/,'');
+      const key = $('key').value.trim();
+      if(!url || !key){ $('status').textContent='请填 URL 和 service_role 密钥'; return; }
+      $('url').value = url;
+      saveCreds(url,key);
+      $('status').textContent='连接中…';
+      try{
+        client = window.supabase.createClient(url, key, { auth:{persistSession:false} });
+        // 读取全部留言，新的在前
+        const { data, error } = await client.from('messages')
+          .select('*').order('created_at',{ascending:false}).limit(200);
+        if(error) throw error;
+        $('status').textContent = '共 ' + data.length + ' 条留言';
+        render(data);
+      }catch(e){
+        console.error(e);
+        $('status').textContent = '连接失败：' + (e.message||e) + '（请确认用的是 service_role 密钥）';
+      }
+    }
+
+    function render(msgs){
+      const list = $('list');
+      if(!msgs.length){ list.innerHTML='<p style="color:#9aa">暂时没有留言。</p>'; return; }
+      list.innerHTML = msgs.map(m=>{
+        const state = m.approved
+          ? '<span style="color:#7fdc8a">已展示</span>'
+          : '<span class="admin-pending">待审核</span>';
+        return `<div class="admin-msg" data-id="${m.id}">
+          <div class="am-meta">${state} · ${esc(m.nickname||'匿名')} · ${fmtTime(m.created_at)}</div>
+          <div class="am-text">${esc(m.content ?? m.message ?? '')}</div>
+          <button class="am-approve" data-act="approve">${m.approved?'已通过 ✓':'通过并展示'}</button>
+          <button class="am-hide" data-act="hide">${m.approved?'撤下':'暂不展示'}</button>
+          <button class="am-delete" data-act="delete">删除</button>
+        </div>`;
+      }).join('');
+    }
+
+    async function act(id, action){
+      if(!client) return;
+      try{
+        if(action==='delete'){
+          if(!confirm('确定删除这条留言吗？删除后不可恢复。')) return;
+          const {error}=await client.from('messages').delete().eq('id',id);
+          if(error) throw error;
+        }else{
+          const approved = action==='approve';
+          const {error}=await client.from('messages').update({approved}).eq('id',id);
+          if(error) throw error;
+        }
+        load();
+      }catch(e){ alert('操作失败：'+(e.message||e)); }
+    }
+
+    document.addEventListener('click',(e)=>{
+      const btn = e.target.closest('button[data-act]');
+      if(btn){ const card=btn.closest('.admin-msg'); act(card.dataset.id, btn.dataset.act); return; }
+      if(e.target.id==='connect') load();
+    });
+
+    // 自动填回上次保存的凭证
+    (function(){ const s=saved(); if(s.u){$('url').value=s.u;} if(s.k){$('key').value=s.k;} })();
+  </script>
+</body>
+</html>

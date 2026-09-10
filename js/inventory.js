@@ -1,6 +1,6 @@
 import * as THREE from 'three';
-import { BlockType, BlockNames, BLOCK_TEXTURES, createBlockTexture, ATLAS_COLS, TEX_SIZE } from './voxel.js?v=20260917b';
-import { ItemNames, getItemIcon } from './equipment.js?v=20260917b';
+import { BlockType, BlockNames, BLOCK_TEXTURES, createBlockTexture, ATLAS_COLS, TEX_SIZE } from './voxel.js?v=20260922a';
+import { ItemNames, getItemIcon } from './equipment.js?v=20260922a';
 
 /**
  * 创造模式背包：
@@ -16,17 +16,17 @@ export class Inventory {
     this.selectedSourceType = null; // 从背包网格中点击选中的方块
     this.onHotbarChange = null; // 回调：(hotbar: number[]) => void
     // 9 格热键栏，0=空气，其余为 BlockType
-    this.hotbar = [
+    this._defaultHotbar = [
       BlockType.GRASS, BlockType.DIRT, BlockType.STONE,
       BlockType.WOOD, BlockType.LEAVES, BlockType.SAND,
       BlockType.PLANKS, BlockType.GLASS, BlockType.AIR,
     ];
+    this.hotbar = this._defaultHotbar.slice();
 
     this._atlasTexture = createBlockTexture();
     this._buildDom();
     this._buildFullList();
     this._renderHotbar();
-    this._bindKeys();
   }
 
   _buildDom() {
@@ -41,12 +41,20 @@ export class Inventory {
         <div class="inventory-hotbar-label">快捷栏（按 1 ~ 9 切换）</div>
         <div class="inventory-hotbar" id="inv-hotbar"></div>
         <div class="inventory-tips">E 关闭背包 · 点击空槽位可清除 · 创造模式无限放置</div>
+        <div class="inventory-actions">
+          <button id="inv-reset" class="inv-reset-btn" type="button">↺ 恢复默认方块（清空兑换物品）</button>
+        </div>
       </div>
     `;
     document.body.appendChild(overlay);
     this.overlay = overlay;
     this.gridEl = overlay.querySelector('#inv-grid');
     this.hotbarEl = overlay.querySelector('#inv-hotbar');
+    // 一键恢复默认方块栏（清掉兑换物品/武器）
+    const resetBtn = overlay.querySelector('#inv-reset');
+    if (resetBtn) {
+      resetBtn.addEventListener('click', () => this.resetHotbar());
+    }
     overlay.addEventListener('mousedown', (e) => {
       if (e.target === overlay) this.close();
     });
@@ -168,14 +176,8 @@ export class Inventory {
     if (this.onHotbarChange) this.onHotbarChange(this.hotbar.slice());
   }
 
-  _bindKeys() {
-    document.addEventListener('keydown', (e) => {
-      if (e.code === 'KeyE') {
-        e.preventDefault();
-        this.toggle();
-      }
-    });
-  }
+  // 注意：E 键开关统一由 game.js 处理，这里不再单独监听，
+  // 否则会与 game.js 的 E 处理同时触发，导致"刚打开又被关掉"。
 
   toggle() {
     this.isOpen ? this.close() : this.open();
@@ -187,10 +189,15 @@ export class Inventory {
   }
 
   close() {
+    if (!this.isOpen) return;
     this.isOpen = false;
     this.overlay.classList.remove('open');
     this.selectedSourceType = null;
     this.gridEl.querySelectorAll('.inv-cell.selected').forEach(el => el.classList.remove('selected'));
+    if (typeof this.onClose === 'function') {
+      const cb = this.onClose; this.onClose = null;
+      try { cb(); } catch (e) { console.warn(e); }
+    }
   }
 
   /** 玩家选中的当前方块（用于游戏内放置） */
@@ -203,6 +210,13 @@ export class Inventory {
   setHotbarSlot(slotIndex, type) {
     if (slotIndex < 0 || slotIndex >= this.hotbar.length) return;
     this.hotbar[slotIndex] = type;
+    this._renderHotbar();
+    this._emit();
+  }
+
+  /** 一键恢复默认方块栏（清掉所有兑换物品/武器，第 9 格回到磁铁） */
+  resetHotbar() {
+    this.hotbar = this._defaultHotbar.slice();
     this._renderHotbar();
     this._emit();
   }
