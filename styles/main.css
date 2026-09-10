@@ -1048,3 +1048,25 @@ html, body {
   .portfolio-grid { grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 8px; }
   .photo-title { font-size: 12px; }
 }
+
+/* 新手引导面板的关闭按钮 */
+.tutorial-panel .tu-close {
+  pointer-events: auto;
+  position: absolute;
+  top: 6px;
+  right: 8px;
+  width: 26px;
+  height: 26px;
+  border: none;
+  border-radius: 50%;
+  background: rgba(244, 107, 149, 0.15);
+  color: #d2457a;
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  -webkit-tap-highlight-color: transparent;
+}
+.tutorial-panel .tu-close:active { background: #f46b95; color: #fff; }

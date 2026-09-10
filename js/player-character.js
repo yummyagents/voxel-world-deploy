@@ -185,8 +185,8 @@ export class PlayerCharacter {
   update(player, dt) {
     // 脚底在 player.position.y（碰撞体）
     this.group.position.set(player.position.x, player.position.y, player.position.z);
-    // 朝向：相机 yaw；模型面向 -z 方向，需要旋转
-    this.group.rotation.y = player.yaw;
+    // 朝向：模型正面（眼/鼻）朝 +z，玩家视线 yaw=0 朝 -z，需补 180° 才面向视线方向
+    this.group.rotation.y = player.yaw + Math.PI;
 
     const moving = (Math.abs(player.velocity.x) + Math.abs(player.velocity.z)) > 0.6;
     if (moving && player.onGround) {

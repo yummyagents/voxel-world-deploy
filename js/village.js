@@ -1,6 +1,6 @@
 import * as THREE from 'three';
-import { BlockType, CHUNK_HEIGHT, Biome } from './voxel.js?v=20260915a';
-import { SimplexNoise } from './noise.js?v=20260915a';
+import { BlockType, CHUNK_HEIGHT, Biome } from './voxel.js?v=20260917b';
+import { SimplexNoise } from './noise.js?v=20260917b';
 
 /**
  * 村庄生成系统

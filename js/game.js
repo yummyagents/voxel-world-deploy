@@ -8,26 +8,26 @@ import {
   World, Chunk, BlockType, BlockNames, isSolid,
   CHUNK_SIZE, CHUNK_HEIGHT, RENDER_DISTANCE, getBlockColor,
   isMobileDevice, getRenderDistance, getBlockDrop, BiomeNames, Biome,
-} from './voxel.js?v=20260915a';
-import { AnimalManager, Sheep, Rabbit, Horse, Cow, Pig, Chicken, Villager, IronGolem } from './animals.js?v=20260915a';
-import { WeatherSystem, WeatherType, WeatherNames } from './weather.js?v=20260915a';
-import { DayNightCycle } from './daynight.js?v=20260915a';
-import { DropManager } from './drops.js?v=20260915a';
-import { VillageGenerator } from './village.js?v=20260915a';
-import { Inventory } from './inventory.js?v=20260915a';
-import { ExchangeShop } from './exchange.js?v=20260915a';
-import { createHeldModel, createArmModel, ItemNames, getItemIcon } from './equipment.js?v=20260915a';
-import { StructureGenerator } from './structures.js?v=20260915a';
-import { PlayerCharacter } from './player-character.js?v=20260915a';
-import { SakuraPetals } from './sakura.js?v=20260915a';
-import { BirdManager } from './birds.js?v=20260915a';
-import { SoundFX } from './audio.js?v=20260915a';
-import { Tutorial } from './tutorial.js?v=20260915a';
+} from './voxel.js?v=20260917b';
+import { AnimalManager, Sheep, Rabbit, Horse, Cow, Pig, Chicken, Villager, IronGolem } from './animals.js?v=20260917b';
+import { WeatherSystem, WeatherType, WeatherNames } from './weather.js?v=20260917b';
+import { DayNightCycle } from './daynight.js?v=20260917b';
+import { DropManager } from './drops.js?v=20260917b';
+import { VillageGenerator } from './village.js?v=20260917b';
+import { Inventory } from './inventory.js?v=20260917b';
+import { ExchangeShop } from './exchange.js?v=20260917b';
+import { createHeldModel, createArmModel, ItemNames, getItemIcon } from './equipment.js?v=20260917b';
+import { StructureGenerator } from './structures.js?v=20260917b';
+import { PlayerCharacter } from './player-character.js?v=20260917b';
+import { SakuraPetals } from './sakura.js?v=20260917b';
+import { BirdManager } from './birds.js?v=20260917b';
+import { SoundFX } from './audio.js?v=20260917b';
+import { Tutorial } from './tutorial.js?v=20260917b';
 import {
   loadSave, writeSave, clearSave, hasSave,
   exportSave, importSave,
-} from './save.js?v=20260915a';
-import { Portfolio } from './portfolio.js?v=20260915a';
+} from './save.js?v=20260917b';
+import { Portfolio } from './portfolio.js?v=20260917b';
 
 /* ============================================
    玩家类 - 第一人称角色控制
@@ -310,7 +310,13 @@ class Player {
    * 使用标准 DDA 算法准确计算命中面的法线
    */
   _raycast() {
-    const origin = this.camera.position;
+    // 射线起点：始终从玩家眼睛位置出发（而不是相机位置）。
+    // 这样第三人称下，准星瞄准的就是角色真正注视的方块，而不会被相机位置/角色身体干扰。
+    const origin = new THREE.Vector3(
+      this.position.x,
+      this.position.y + this.eyeHeight,
+      this.position.z
+    );
     const direction = new THREE.Vector3(
       -Math.sin(this.yaw) * Math.cos(this.pitch),
       Math.sin(this.pitch),
@@ -987,7 +993,10 @@ class Game {
     try {
       if (!this.shop) {
         this.shop = new ExchangeShop();
-        this.shop.onRedeem = (name) => { this.sound && this.sound.buy(); this._toast(`已兑换：${name}`); };
+        this.shop.onRedeem = (name, info) => {
+          this.sound && this.sound.buy();
+          this._toast(info && info.how ? `已兑换：${name}｜${info.how}` : `已兑换：${name}`);
+        };
       }
       if (this.inventory) this.shop.inventory = this.inventory;
       this.shop.toggle();
@@ -1000,11 +1009,112 @@ class Game {
 
   /** 拍摄当前场景 */
   takePhoto() {
-    if (!this.portfolio || !this.renderer) return;
+    if (!this.portfolio || !this.renderer) {
+      this._toast('相机还没准备好，请先进到游戏世界里');
+      return;
+    }
     // 拍前渲染一帧保证画面最新
     try { this.renderer.render(this.scene, this.camera); } catch (e) {}
     const ok = this.portfolio.capture(this.renderer);
-    if (!ok) this._toast('拍照失败，请重试');
+    if (ok) {
+      this._photoFlash();
+    } else {
+      this._toast('拍照失败，请重试');
+    }
+  }
+
+  /** 拍照白闪反馈 */
+  _photoFlash() {
+    let el = document.getElementById('photoFlash');
+    if (!el) {
+      el = document.createElement('div');
+      el.id = 'photoFlash';
+      document.body.appendChild(el);
+    }
+    el.classList.remove('flashing');
+    void el.offsetWidth; // 强制重排，重新触发动画
+    el.classList.add('flashing');
+    try { if (this.sound) this.sound.click(); } catch (e) {}
+  }
+
+  /** 手持武器时的挥砍反馈（音效 + 第一人称手臂挥动） */
+  _swing() {
+    try { if (this.sound) this.sound.break(); } catch (e) {}
+    // 第一人称：手臂挥一下
+    if (this.viewMode === 'first' && this.heldGroup) {
+      this._swingT = 0.22; // 挥砍动画剩余时间
+    }
+  }
+
+  /**
+   * 隐藏彩蛋：按下 F 键在玩家头顶撒一波彩色庆祝粒子（樱花/彩带）。
+   * 纯视觉、无副作用，约 2 秒后自动消失。
+   */
+  _celebrate() {
+    if (!this.scene || !this.player) return;
+    try { if (this.sound) this.sound.taskDone(); } catch (e) {}
+    const N = 60;
+    const geo = new THREE.BufferGeometry();
+    const pos = new Float32Array(N * 3);
+    const col = new Float32Array(N * 3);
+    const vel = [];
+    const cx = this.player.position.x;
+    const cy = this.player.position.y + 2.2;
+    const cz = this.player.position.z;
+    const palette = [
+      [1.0, 0.55, 0.75], // 粉
+      [1.0, 0.9, 0.4],   // 黄
+      [0.55, 0.85, 1.0], // 蓝
+      [0.6, 1.0, 0.6],   // 绿
+      [0.85, 0.65, 1.0], // 紫
+    ];
+    for (let i = 0; i < N; i++) {
+      pos[i * 3] = cx;
+      pos[i * 3 + 1] = cy;
+      pos[i * 3 + 2] = cz;
+      const c = palette[i % palette.length];
+      col[i * 3] = c[0]; col[i * 3 + 1] = c[1]; col[i * 3 + 2] = c[2];
+      const ang = Math.random() * Math.PI * 2;
+      const spd = 2 + Math.random() * 3;
+      vel.push(new THREE.Vector3(
+        Math.cos(ang) * spd,
+        3 + Math.random() * 3,
+        Math.sin(ang) * spd
+      ));
+    }
+    geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+    geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
+    const mat = new THREE.PointsMaterial({
+      size: 0.28, vertexColors: true, transparent: true,
+      depthWrite: false, sizeAttenuation: true,
+    });
+    const points = new THREE.Points(geo, mat);
+    points.frustumCulled = false;
+    this.scene.add(points);
+    this._toast('🌸 彩蛋：撒花庆祝！');
+
+    let life = 2.0;
+    const tick = (dt) => {
+      life -= dt;
+      const arr = geo.attributes.position.array;
+      for (let i = 0; i < N; i++) {
+        const v = vel[i];
+        v.y -= 9 * dt; // 重力
+        arr[i * 3] += v.x * dt;
+        arr[i * 3 + 1] += v.y * dt;
+        arr[i * 3 + 2] += v.z * dt;
+      }
+      geo.attributes.position.needsUpdate = true;
+      mat.opacity = Math.max(0, life / 2.0);
+      if (life <= 0) {
+        this.scene.remove(points);
+        geo.dispose(); mat.dispose();
+        return false;
+      }
+      return true;
+    };
+    if (!this._celebrates) this._celebrates = [];
+    this._celebrates.push(tick);
   }
 
   /** 存档相关按钮与事件 */
@@ -1579,10 +1689,21 @@ class Game {
         this.takePhoto();
       }
 
+      // F 键：隐藏彩蛋 —— 撒一波樱花/彩带庆祝（小朋友的惊喜）
+      if (e.code === 'KeyF') {
+        this._celebrate();
+      }
+
       // P 键打开作品集相册
       if (e.code === 'KeyP' && this.portfolio) {
         if (document.pointerLockElement) document.exitPointerLock();
         this.portfolio.toggle();
+      }
+
+      // H 键：关闭 / 重开新手教程面板（指针锁定时也能用，无需解放鼠标）
+      if (e.code === 'KeyH' && this.tutorial) {
+        if (this.tutorial._dismissed) this.tutorial.show();
+        else this.tutorial.dismiss();
       }
     });
 
@@ -1602,8 +1723,18 @@ class Game {
       if (!this.isPointerLocked) return;
       if (this.inventory && this.inventory.isOpen) return;
       if (e.button === 0) {
-        this.player.placeBlock();
+        // 左键：手持武器/装备时触发挥砍（不放置方块）；否则放置方块
+        const held = this.player ? this.player.selectedBlock : 0;
+        if (held && held < 0) {
+          this._swing();
+        } else {
+          this.player.placeBlock();
+        }
       } else if (e.button === 2) {
+        const held = this.player ? this.player.selectedBlock : 0;
+        if (held && held < 0) {
+          this._swing();
+        }
         this.player.breakBlock();
       }
     });
@@ -1857,10 +1988,16 @@ class Game {
           Math.floor(camX), Math.floor(camZ)) : 0;
         if (camY < ground + 0.5) camY = ground + 0.5;
         this.camera.position.set(camX, camY, camZ);
+        // 让相机看向"角色眼睛沿视线方向"的远处点，保证屏幕准星 == 真正瞄准/放置位置
+        const aimDir = new THREE.Vector3(
+          -Math.sin(yaw) * Math.cos(pitch),
+          Math.sin(pitch),
+          -Math.cos(yaw) * Math.cos(pitch)
+        );
         this.camera.lookAt(
-          this.player.position.x,
-          this.player.position.y + 1.3,
-          this.player.position.z
+          this.player.position.x + aimDir.x * 10,
+          eyeY + aimDir.y * 10,
+          this.player.position.z + aimDir.z * 10
         );
         // 角色更新
         if (this.playerChar) {
@@ -1919,12 +2056,27 @@ class Game {
       const moving = this.player.onGround && (
         Math.abs(this.player.velocity.x) + Math.abs(this.player.velocity.z) > 0.5);
       this._heldBob += dt * (moving ? 9 : 2);
-      this.heldGroup.position.y = Math.sin(this._heldBob) * (moving ? 0.02 : 0.006);
+      let swingX = 0, swingRot = 0;
+      // 挥砍动画（持武器左键/右键时触发，0.22 秒内手臂向下挥再回位）
+      if (this._swingT && this._swingT > 0) {
+        this._swingT -= dt;
+        const p = 1 - Math.max(0, this._swingT) / 0.22; // 0→1
+        const s = Math.sin(p * Math.PI);                  // 0→1→0
+        swingX = -s * 0.35;
+        swingRot = -s * 1.1;
+      }
+      this.heldGroup.position.y = Math.sin(this._heldBob) * (moving ? 0.02 : 0.006) + swingX;
       this.heldGroup.position.x = Math.cos(this._heldBob * 0.5) * (moving ? 0.012 : 0);
+      this.heldGroup.rotation.x = swingRot;
     }
 
     // 自动存档（每 20 秒，仅有改动时）
     this._tickSave(dt);
+
+    // 彩蛋粒子（庆祝撒花）
+    if (this._celebrates && this._celebrates.length) {
+      this._celebrates = this._celebrates.filter(fn => fn(dt));
+    }
 
     // 渲染
     this.renderer.render(this.scene, this.camera);

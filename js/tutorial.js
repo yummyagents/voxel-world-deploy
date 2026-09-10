@@ -35,6 +35,7 @@ export class Tutorial {
     const el = document.createElement('div');
     el.className = 'tutorial-panel';
     el.innerHTML = `
+      <button class="tu-close" aria-label="关闭引导" title="关闭引导">✕</button>
       <div class="tu-bunny">🐰</div>
       <div class="tu-body">
         <div class="tu-title"></div>
@@ -46,6 +47,23 @@ export class Tutorial {
     this.titleEl = el.querySelector('.tu-title');
     this.textEl = el.querySelector('.tu-text');
     this.progressEl = el.querySelector('.tu-progress');
+    const closeBtn = el.querySelector('.tu-close');
+    if (closeBtn) closeBtn.addEventListener('click', () => this.dismiss());
+    this._render();
+  }
+
+  /** 立即关闭引导面板（并隐藏兔子头顶气泡），任务不再显示但仍可继续 */
+  dismiss() {
+    this._dismissed = true;
+    if (this.el) this.el.classList.add('tu-hide');
+    if (this.sprite) this.sprite.visible = false;
+  }
+
+  /** 重新显示引导面板（用于快捷键重开） */
+  show() {
+    this._dismissed = false;
+    if (this.el) this.el.classList.remove('tu-hide');
+    if (this.sprite) this.sprite.visible = true;
     this._render();
   }
 
@@ -128,7 +146,7 @@ export class Tutorial {
     if (this.step >= TUTORIAL_STEPS.length - 1) {
       this.completed = true;
       this.sound.allDone();
-      setTimeout(() => { if (this.el) this.el.classList.add('tu-hide'); }, 8000);
+      setTimeout(() => this.dismiss(), 8000);
     }
     this._render();
   }

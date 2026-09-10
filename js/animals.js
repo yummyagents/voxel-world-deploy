@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { CHUNK_SIZE, CHUNK_HEIGHT, isSolid, BlockType } from './voxel.js?v=20260915a';
+import { CHUNK_SIZE, CHUNK_HEIGHT, isSolid, BlockType } from './voxel.js?v=20260917b';
 
 /**
  * 友好生物系统

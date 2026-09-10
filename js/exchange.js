@@ -1,5 +1,5 @@
-import { BlockType, BlockNames, BLOCK_TEXTURES, createBlockTexture, ATLAS_COLS, TEX_SIZE } from './voxel.js?v=20260915a';
-import { ItemType, ItemNames, getItemIcon } from './equipment.js?v=20260915a';
+import { BlockType, BlockNames, BLOCK_TEXTURES, createBlockTexture, ATLAS_COLS, TEX_SIZE } from './voxel.js?v=20260917b';
+import { ItemType, ItemNames, getItemIcon } from './equipment.js?v=20260917b';
 
 /**
  * 装备兑换 / 商店：
@@ -139,20 +139,37 @@ export class ExchangeShop {
     }
   }
 
-  /** 兑换：放进快捷栏 */
+  /** 兑换：放进快捷栏（前 8 格，绝不占用第 9 格磁铁收集槽） */
   _redeem(type) {
     if (!this.inventory) return;
     const hb = this.inventory.hotbar;
-    // 已在快捷栏则选中它
-    let idx = hb.indexOf(type);
+    const PLACEABLE = 8; // 槽位 0~7 是方块/物品槽，槽位 8 是磁铁收集专用
+    // 已在快捷栏前 8 格则选中它
+    let idx = hb.slice(0, PLACEABLE).indexOf(type);
     if (idx === -1) {
-      // 找第一个空槽（0/空/AIR 视为空）
-      idx = hb.findIndex(t => !t || t === BlockType.AIR);
-      if (idx === -1) idx = this.inventory.selectedSlot ?? 0;
+      // 在前 8 格里找第一个空槽（空/AIR 视为空）
+      idx = -1;
+      for (let i = 0; i < PLACEABLE; i++) {
+        const t = hb[i];
+        if (!t || t === BlockType.AIR) { idx = i; break; }
+      }
+      // 前 8 格都满了：用当前选中槽（若是磁铁槽则回退到槽 0）
+      if (idx === -1) {
+        const cur = this.inventory.selectedSlot ?? 0;
+        idx = cur < PLACEABLE ? cur : 0;
+      }
       this.inventory.setHotbarSlot(idx, type);
     }
-    if (this.inventory.selectSlot) this.inventory.selectSlot(idx);
-    if (this.onRedeem) this.onRedeem(itemName(type));
+    this.inventory.selectSlot ? this.inventory.selectSlot(idx) : null;
+    const nm = itemName(type);
+    const key = idx + 1; // 显示给玩家的数字键（槽 0→键 1）
+    if (this.onRedeem) {
+      // 负数 = 武器/手持物；非负 = 可放置方块/家具
+      const how = type < 0
+        ? `已拿在手上（第 ${key} 格），对着前方点鼠标/点“拆”就能挥动`
+        : `已放进第 ${key} 格，选中后【左键/点“放”】放在地上`;
+      this.onRedeem(nm, { key, how, placeable: type >= 0 });
+    }
   }
 
   open() {

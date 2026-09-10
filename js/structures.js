@@ -8,7 +8,7 @@
 // - WELCOME 欢迎拱门（回家入口）
 // - 通往外部世界的小路 + 围栏
 // 所有方块用 world.setBlockGen 写入（属于世界生成，不计入玩家改动存档）。
-import { BlockType, CHUNK_HEIGHT, SEA_LEVEL } from './voxel.js?v=20260915a';
+import { BlockType, CHUNK_HEIGHT, SEA_LEVEL } from './voxel.js?v=20260917b';
 
 // 家园坐标中心（世界原点），出生点在家园南侧空地
 export const HOME_CX = 0;
