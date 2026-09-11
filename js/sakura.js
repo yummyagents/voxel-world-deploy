@@ -55,14 +55,31 @@ export class SakuraPetals {
     this.range = 18;
     this.height = 14;
     this._initialized = false;
+    // 密度 0~1：由外部按玩家是否在樱花林/出生家园设置（控制花瓣多少）
+    this.density = 0;
+    this._targetDensity = 0;
+  }
+
+  /** 设置目标花瓣密度（0=无，1=最盛），会平滑过渡 */
+  setDensity(d) {
+    this._targetDensity = Math.max(0, Math.min(1, d));
   }
 
   update(dt, playerPos) {
+    // 平滑过渡密度，避免花瓣突然出现/消失
+    this.density += (this._targetDensity - this.density) * Math.min(1, dt * 2);
+    const visibleCount = (this.density * this.count) | 0;
+    this.points.material.opacity = 0.35 + this.density * 0.65;
     const cx = playerPos.x;
     const cz = playerPos.z;
     const baseY = playerPos.y;
     for (let i = 0; i < this.count; i++) {
       const ix = i * 3;
+      // 超出当前密度的花瓣"藏"到高空不可见处
+      if (i >= visibleCount) {
+        this.positions[ix + 1] = baseY + 1000;
+        continue;
+      }
       if (!this._initialized) {
         this.positions[ix] = cx + (Math.random() - 0.5) * this.range * 2;
         this.positions[ix + 1] = baseY + Math.random() * this.height;

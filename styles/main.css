@@ -180,7 +180,7 @@ html, body {
   backdrop-filter: blur(6px);
   -webkit-backdrop-filter: blur(6px);
   cursor: default;
-  padding: clamp(14px, 3.5vh, 40px) clamp(12px, 5vw, 40px) clamp(40px, 7vh, 72px);
+  padding: clamp(8px, 1.8vh, 24px) clamp(12px, 5vw, 40px) clamp(20px, 4vh, 40px);
   box-sizing: border-box;
 }
 /* 让内容在可视区居中，但超高时可整体滚动 */
@@ -192,6 +192,117 @@ html, body {
   flex-direction: column;
   align-items: center;
 }
+
+/* ===== 开始界面两步引导（第1步欢迎+留言墙 → 第2步选特工+开始） ===== */
+.step-dots {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  margin: 4px auto 10px;
+}
+.step-dots .sd {
+  width: 26px; height: 26px;
+  display: inline-flex; align-items: center; justify-content: center;
+  border-radius: 50%;
+  font-family: 'Courier New', monospace;
+  font-weight: 800; font-size: 14px;
+  color: rgba(255,240,210,0.6);
+  background: rgba(20,12,4,0.55);
+  border: 2px solid rgba(255,255,255,0.18);
+}
+.step-dots .sd.active {
+  color: #4a2c00;
+  background: linear-gradient(135deg, #ffd34d, #f4a63c);
+  border-color: transparent;
+  box-shadow: 0 0 0 3px rgba(255,200,80,0.25), 0 4px 12px rgba(255,190,60,0.4);
+}
+.step-dots .sd-line {
+  width: 46px; height: 3px; border-radius: 2px;
+  background: rgba(255,255,255,0.2);
+}
+
+.start-step {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+.start-step[hidden] { display: none !important; }
+.start-step.active { animation: stepIn .28s ease; }
+@keyframes stepIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.step-title {
+  font-family: 'Courier New', monospace;
+  font-weight: 800;
+  font-size: clamp(17px, 4.5vw, 22px);
+  color: #ffe9a8;
+  text-shadow: 0 2px 6px rgba(0,0,0,0.7);
+  margin: 2px 0 14px;
+  text-align: center;
+}
+
+.step-box {
+  width: 100%;
+  max-width: 560px;
+  box-sizing: border-box;
+  padding: 12px 14px;
+  margin: 6px 0 8px;
+  background: rgba(20,12,4,0.5);
+  border: 2px solid rgba(255,255,255,0.14);
+  border-radius: 16px;
+}
+.step-box-title {
+  font-family: 'Courier New', monospace;
+  font-weight: 800;
+  font-size: 15px;
+  color: #ffd34d;
+  text-shadow: 0 2px 5px rgba(0,0,0,0.6);
+  margin-bottom: 8px;
+  text-align: center;
+}
+.step-box #communityMount > * { width: 100%; max-width: none; box-sizing: border-box; }
+.step-box .cm-box { margin-left: auto; margin-right: auto; }
+
+.tab-hint {
+  margin-top: 12px;
+  font-size: 12px;
+  color: rgba(255,240,210,0.68);
+  text-align: center;
+  line-height: 1.6;
+  max-width: 440px;
+}
+
+.step-back {
+  margin-top: 14px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  font-family: 'Courier New', monospace;
+  font-weight: 700;
+  font-size: 14px;
+  color: rgba(255,240,210,0.72);
+  padding: 8px 18px;
+  border-radius: 10px;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+.step-back:hover { color: #ffd34d; background: rgba(255,255,255,0.06); }
+
+#startScreen .start-step .save-menu,
+#startScreen .start-step .controls-info { width: 100%; max-width: 560px; box-sizing: border-box; }
+
+/* 第 1 步：留言板自然展开（不设内部滚动框），整页可滚动；矮屏/手机上缩小 logo 与留白 */
+@media (max-height: 800px) {
+  #startScreen .logo-lockup { transform: scale(0.85); margin: -8px 0; }
+  #startScreen .start-welcome { font-size: 14px; margin: 2px 0 6px; }
+  .step-box { padding: 12px; }
+}
+
+
 
 /* ===== 开始界面标题（专业像素游戏开场） ===== */
 .start-hero {
@@ -234,13 +345,13 @@ html, body {
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: 6px 20px 2px;
+  padding: 2px 20px 0;
 }
 /* 立体方块吉祥物（CSS 三面） */
 .logo-cube {
-  width: 46px; height: 46px;
+  width: 38px; height: 38px;
   position: relative;
-  margin-bottom: 6px;
+  margin-bottom: 2px;
   animation: cubeBob 2.6s ease-in-out infinite;
   transform-style: preserve-3d;
 }
@@ -272,8 +383,8 @@ html, body {
 .logo-zh {
   font-family: 'Courier New', monospace;
   font-weight: 900;
-  font-size: clamp(36px, 8.2vw, 72px);
-  letter-spacing: 5px;
+  font-size: clamp(30px, 7vw, 58px);
+  letter-spacing: 4px;
   background: linear-gradient(180deg, #fff7c0 0%, #ffe26a 42%, #ffc233 58%, #f29422 100%);
   -webkit-background-clip: text;
   background-clip: text;
@@ -296,12 +407,12 @@ html, body {
   font-size: clamp(10px, 2.2vw, 14px);
   letter-spacing: 6px;
   color: #7fe3e0;
-  margin-top: 12px;
+  margin-top: 6px;
   text-shadow: 0 0 10px rgba(127,227,224,.55), 0 2px 4px rgba(0,0,0,.8);
 }
 .logo-rule {
   display: flex; align-items: center; gap: 10px;
-  margin-top: 12px;
+  margin-top: 6px;
   font-family: 'Courier New', monospace;
   font-size: clamp(12px, 2.8vw, 17px);
   font-weight: 700;
@@ -319,11 +430,11 @@ html, body {
 
 .start-welcome {
   font-family: 'Courier New', monospace;
-  font-size: clamp(12px, 2.8vw, 16px);
-  line-height: 1.7;
+  font-size: clamp(12px, 2.6vw, 15px);
+  line-height: 1.55;
   color: #fff;
-  margin-top: 18px;
-  padding: 10px 20px;
+  margin-top: 8px;
+  padding: 7px 18px;
   background: rgba(20,12,4,.42);
   border: 2px solid rgba(255,240,200,.28);
   border-radius: 12px;
@@ -550,15 +661,15 @@ html, body {
 .start-play-btn {
   font-family: 'Courier New', monospace;
   cursor: pointer;
-  margin: 20px auto 8px;
+  margin: 12px auto 6px;
   display: inline-flex;
   align-items: center;
   gap: 10px;
-  font-size: clamp(18px, 4.2vw, 26px);
+  font-size: clamp(16px, 3.8vw, 22px);
   font-weight: 900;
-  letter-spacing: 3px;
+  letter-spacing: 2px;
   color: #fff;
-  padding: clamp(12px, 2.4vh, 18px) clamp(30px, 8vw, 56px);
+  padding: clamp(10px, 2vh, 15px) clamp(28px, 8vw, 52px);
   border: 3px solid rgba(255,255,255,.85);
   border-radius: 16px;
   background: linear-gradient(180deg, #6fd17e 0%, #3fae5a 55%, #2f8f47 100%);
@@ -577,7 +688,18 @@ html, body {
 /* 开始界面内的存档菜单/操作说明等块宽度对齐 */
 #startScreen .save-menu,
 #startScreen .controls-info,
-#startScreen #communityMount { width: 100%; max-width: 560px; }
+#startScreen #communityMount { width: 100%; max-width: 560px; box-sizing: border-box; }
+/* 社区面板根容器（community.js 动态插入的 box）：整宽、纵向排列、居中，避免留言板偏左 */
+#startScreen #communityMount > * {
+  width: 100%;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+}
+#startScreen #communityMount .cm-board,
+#startScreen #communityMount .cm-visits,
+#startScreen #communityMount .cm-like-btn { margin-left: auto; margin-right: auto; }
 
 .start-title {
   font-size: 52px;
@@ -915,6 +1037,7 @@ html, body {
   z-index: 22;
   box-shadow: 0 3px 10px rgba(0,0,0,0.35);
   -webkit-tap-highlight-color: transparent;
+  touch-action: none;
 }
 #mMenuBtn:active { transform: scale(0.92); }
 
@@ -934,6 +1057,7 @@ html, body {
   z-index: 22;
   box-shadow: 0 8px 26px rgba(0,0,0,0.45);
   backdrop-filter: blur(4px);
+  touch-action: none;
 }
 .m-menu-panel.open { display: grid; }
 .m-fn {
@@ -950,6 +1074,7 @@ html, body {
   font-size: 20px;
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
 }
 .m-fn span { font-size: 11px; opacity: 0.9; }
 .m-fn:active { background: rgba(244,107,149,0.4); transform: scale(0.94); }

@@ -8,26 +8,28 @@ import {
   World, Chunk, BlockType, BlockNames, isSolid,
   CHUNK_SIZE, CHUNK_HEIGHT, RENDER_DISTANCE, getBlockColor,
   isMobileDevice, getRenderDistance, getBlockDrop, BiomeNames, Biome,
-} from './voxel.js?v=20260924d';
-import { AnimalManager, Sheep, Rabbit, Horse, Cow, Pig, Chicken, Villager, IronGolem } from './animals.js?v=20260924d';
-import { WeatherSystem, WeatherType, WeatherNames } from './weather.js?v=20260924d';
-import { DayNightCycle } from './daynight.js?v=20260924d';
-import { DropManager } from './drops.js?v=20260924d';
-import { VillageGenerator } from './village.js?v=20260924d';
-import { Inventory } from './inventory.js?v=20260924d';
-import { ExchangeShop } from './exchange.js?v=20260924d';
-import { createHeldModel, createArmModel, ItemNames, getItemIcon, AGENT_ARMS } from './equipment.js?v=20260924d';
-import { StructureGenerator } from './structures.js?v=20260924d';
-import { PlayerCharacter } from './player-character.js?v=20260924d';
-import { SakuraPetals } from './sakura.js?v=20260924d';
-import { BirdManager } from './birds.js?v=20260924d';
-import { SoundFX } from './audio.js?v=20260924d';
-import { Tutorial } from './tutorial.js?v=20260924d';
+} from './voxel.js?v=20260925l';
+import { AnimalManager, Sheep, Rabbit, Horse, Cow, Pig, Chicken, Villager, IronGolem } from './animals.js?v=20260925l';
+import { WeatherSystem, WeatherType, WeatherNames } from './weather.js?v=20260925l';
+import { DayNightCycle } from './daynight.js?v=20260925l';
+import { DropManager } from './drops.js?v=20260925l';
+import { VillageGenerator } from './village.js?v=20260925l';
+import { Inventory } from './inventory.js?v=20260925l';
+import { ExchangeShop } from './exchange.js?v=20260925l';
+import { createHeldModel, createArmModel, ItemNames, getItemIcon, AGENT_ARMS } from './equipment.js?v=20260925l';
+import { StructureGenerator, PLAYER_SPAWN } from './structures.js?v=20260925l';
+import { PlayerCharacter } from './player-character.js?v=20260925l';
+import { SakuraPetals } from './sakura.js?v=20260925l';
+import { BirdManager, ButterflyManager } from './birds.js?v=20260925l';
+import { WindmillBlades } from './windmill.js?v=20260925l';
+import { Fireflies } from './fireflies.js?v=20260925l';
+import { SoundFX } from './audio.js?v=20260925l';
+import { Tutorial } from './tutorial.js?v=20260925l';
 import {
   loadSave, writeSave, clearSave, hasSave,
   exportSave, importSave,
-} from './save.js?v=20260924d';
-import { Portfolio } from './portfolio.js?v=20260924d';
+} from './save.js?v=20260925l';
+import { Portfolio } from './portfolio.js?v=20260925l';
 
 /* ============================================
    玩家类 - 第一人称角色控制
@@ -751,9 +753,9 @@ class Game {
     this._initSaveUI();
     this._initPortfolio();
 
-    // 设置预览视角：近距离平视"WELCOME"立墙
-    this.camera.position.set(0, 25, 14);
-    this.camera.lookAt(0, 26, 0);
+    // 设置预览视角：背景正对出生广场的樱花风车房（穿过 WELCOME 拱门可见）
+    this.camera.position.set(0, 30, 30);
+    this.camera.lookAt(0, 30, 13);
 
     // 开始界面保持显示，背后渲染 3D 世界
     this.ui.loadingBar.style.display = 'block';
@@ -825,10 +827,10 @@ class Game {
       }
     }
 
-    // 出生点：有存档回到上次位置；新世界出生在固定新手家园（世界原点）
-    this._spawnX = 0.5;
-    this._spawnZ = 16.5;
-    this._spawnY = 28;
+    // 出生点：有存档回到上次位置；新世界出生在固定新手家园（WELCOME 拱门后、正对樱花风车房）
+    this._spawnX = PLAYER_SPAWN.x;
+    this._spawnZ = PLAYER_SPAWN.z;
+    this._spawnY = PLAYER_SPAWN.y;
     if (this.saveData && this.saveData.player) {
       this._spawnX = this.saveData.player.x;
       this._spawnZ = this.saveData.player.z;
@@ -847,8 +849,8 @@ class Game {
     this.player.position.set(this._spawnX, this._spawnY, this._spawnZ);
     this.player.velocity.set(0, 0, 0);
     this.player.yaw = (this.saveData && this.saveData.player && typeof this.saveData.player.yaw === 'number')
-      ? this.saveData.player.yaw : Math.PI;    this.player.pitch = (this.saveData && this.saveData.player && typeof this.saveData.player.pitch === 'number')
-      ? this.saveData.player.pitch : -0.2;
+      ? this.saveData.player.yaw : 0;    this.player.pitch = (this.saveData && this.saveData.player && typeof this.saveData.player.pitch === 'number')
+      ? this.saveData.player.pitch : -0.18;
 
     // 相机保持立墙预览视角，等用户点击开始后再切到玩家视角
     // 不做 camera.position 移动，保持背景一直是游戏世界
@@ -910,8 +912,79 @@ class Game {
             this.tutorial.attachRabbit(rabbit); // 气泡挂在兔子 group 上
           }
         }
+        // 风车磨坊转动叶片（动态装饰）
+        if (home.windmillSpot) {
+          try {
+            this.windmill = new WindmillBlades(this.scene, home.windmillSpot);
+          } catch (e) { /* 叶片失败不影响游戏 */ }
+        }
+
+        // 保证在家乡东侧不远处生成一座村庄农庄（农舍+水井+土路+村民），
+        // 避免随机率导致小朋友找不到"农庄"。该结构属于世界生成，不计入存档。
+        if (this.villageGenerator && !this._spawnVillageDone) {
+          this._spawnVillageDone = true;
+          try {
+            const prevTrack = this.world._trackEdits;
+            this.world._trackEdits = false;
+            // 家乡中心约 (0,0)，向东 ~46 格选一块平原做村庄
+            const v = this.villageGenerator.forceVillageAt(46, 6);
+            this.world._trackEdits = prevTrack;
+            if (v) {
+              // 重建村庄涉及的区块网格 + 从家乡修一条沙砾小路通往农庄
+              for (let cx = 2; cx <= 4; cx++) {
+                for (let cz = -1; cz <= 1; cz++) {
+                  this.world.update(cx * 16 + 8, cz * 16 + 8);
+                }
+              }
+              this._buildRoadTo(0, 4, v.x, v.z, v.y);
+              this.world.update(Math.floor(v.x), Math.floor(v.z));
+            }
+          } catch (e) { console.warn('[村庄生成失败]', e); }
+        }
       } catch (err) {
         console.error('新手家园生成失败', err);
+      }
+    }
+
+    // 无论新世界还是旧存档，都幂等确保出生家园核心区有「樱花风车房 + 迎宾道」主景观。
+    // 旧世界（风车版本之前生成的）也会补建，已有则自动跳过，不重复。
+    try {
+      if (this.structures && !this.windmill) {
+        const prevTrack = this.world._trackEdits;
+        this.world._trackEdits = false;
+        const spot = this.structures.ensureWindmillLandmark ? this.structures.ensureWindmillLandmark() : null;
+        this.world._trackEdits = prevTrack;
+        if (spot) {
+          // 重建风车核心区 + 迎宾道 + 拱门/出生点广场网格（z=13~28 跨 chunk cz 0 与 1）
+          for (let cx = -2; cx <= 1; cx++) {
+            for (let cz = -2; cz <= 1; cz++) this.world.update(cx * 16 + 8, cz * 16 + 8);
+          }
+          if (!this.windmill) {
+            try { this.windmill = new WindmillBlades(this.scene, spot); } catch (e) {}
+          }
+        }
+      }
+    } catch (err) {
+      console.warn('[风车地标补建失败]', err);
+    }
+  }
+
+  /** 从 (x1,z1) 到 (x2,z2) 铺一条世界生成的沙砾小路（不堵水、不计入存档） */
+  _buildRoadTo(x1, z1, x2, z2, roadY) {
+    const w = this.world;
+    const steps = Math.max(Math.abs(x2 - x1), Math.abs(z2 - z1));
+    for (let i = 0; i <= steps; i++) {
+      const t = steps === 0 ? 0 : i / steps;
+      const x = Math.round(x1 + (x2 - x1) * t);
+      const z = Math.round(z1 + (z2 - z1) * t);
+      for (let y = roadY + 2; y >= roadY - 6; y--) {
+        const b = w.getBlock(x, y, z);
+        if (b === BlockType.GRASS || b === BlockType.DIRT || b === BlockType.SAND) {
+          w.setBlockGen(x, y, z, BlockType.GRAVEL);
+          break;
+        }
+        if (b !== BlockType.AIR && b !== BlockType.TALL_GRASS && b !== BlockType.FLOWER_RED
+          && b !== BlockType.FLOWER_YELLOW && b !== BlockType.FLOWER_WHITE && b !== BlockType.WATER) break;
       }
     }
   }
@@ -927,7 +1000,7 @@ class Game {
         z: Math.round(p.z * 100) / 100,
         yaw: this.player.yaw,
         pitch: this.player.pitch,
-        character: this.character || 'boy',
+        character: this.character || this._getSelectedChar() || 'burger',
       },
       hotbar: (this.inventory ? this.inventory.hotbar : []).slice(0, 9),
       selectedSlot: this.selectedSlot,
@@ -983,6 +1056,33 @@ class Game {
     el.classList.add('show');
     clearTimeout(this._toastTimer);
     this._toastTimer = setTimeout(() => el.classList.remove('show'), 1600);
+  }
+
+  /** 一键回到出生家园（防迷路/卡住）。传送到出生点并确保站在安全高度。 */
+  teleportHome() {
+    if (!this.started || !this.player) return;
+    try {
+      const x = PLAYER_SPAWN.x;
+      const z = PLAYER_SPAWN.z;
+      // 取地表高度，确保不会卡在地下或悬空
+      let y = PLAYER_SPAWN.y;
+      try {
+        const surf = this.world.getSurfaceHeight(Math.floor(x), Math.floor(z));
+        if (typeof surf === 'number' && surf > 0) y = surf + 2;
+      } catch (e) {}
+      this.player.position.set(x, y, z);
+      this.player.velocity.set(0, 0, 0);
+      if (this.playerChar) this.playerChar.group.position.set(x, y + 0.25, z);
+      // 强制刷新出生点周围区块
+      for (let cx = -1; cx <= 1; cx++) {
+        for (let cz = -1; cz <= 1; cz++) this.world.update(Math.floor(x) + cx * 16, Math.floor(z) + cz * 16);
+      }
+      this._toast('🏠 已回到出生家园');
+      if (this.sound) try { this.sound.click(); } catch (e) {}
+    } catch (e) {
+      console.warn('[回出生点失败]', e);
+      this._toast('回家失败，请再试一次');
+    }
   }
 
   /** 作品集相册：一键截图 + 相册 */
@@ -1267,10 +1367,13 @@ class Game {
       });
     }
 
-    // 开始界面：主角选择（男生蓝宝 / 女生粉嘟）
-    this._initCharSelect();
+    // 开始界面：主角选择（美味特工队 4 角色）
+    // 用 try/catch 隔离：即使角色选择初始化异常，也绝不能拖垮后面的移动端菜单
+    try { this._initCharSelect(); } catch (e) { console.warn('[char] 初始化失败', e); }
+    // 开始界面两步引导（欢迎+留言墙 → 选特工+开始）
+    try { this._initStartSteps(); } catch (e) { console.warn('[steps] 初始化失败', e); }
     // 移动端功能菜单（⋯）
-    if (this.isMobile) this._initMobileMenu();
+    try { if (this.isMobile) this._initMobileMenu(); } catch (e) { console.warn('[mobile-menu] 初始化失败', e); }
 
     // 游戏内快捷键：Ctrl+S 手动保存
     document.addEventListener('keydown', (e) => {
@@ -1301,22 +1404,26 @@ class Game {
     return 'burger';
   }
 
-  /** 开始界面主角选择（美味特工队 4 角色），选择立即写入本地保存 */
+  /** 开始界面主角选择（美味特工队 4 角色），选择立即写入本地保存。
+   *  采用「事件委托」：监听绑在 document 捕获层，点击落到角色卡任意位置（含头像/名字）
+   *  都能命中；不依赖逐卡绑定，也不怕子元素吞事件。桌面移动通用。 */
   _initCharSelect() {
     this.character = this._getSelectedChar();
-    const cards = document.querySelectorAll('.char-card');
-    if (!cards.length) return;
+    const VALID = ['burger', 'fries', 'popcorn', 'witch'];
+    const cards = () => Array.from(document.querySelectorAll('#startScreen .char-card'));
+
     const apply = (gender, silent) => {
+      if (!this._validAgent(gender)) return;
       this.character = gender;
-      cards.forEach((c) => {
+      cards().forEach((c) => {
         const on = c.dataset.char === gender;
         c.classList.toggle('selected', on);
-        if (on) { c.setAttribute('aria-pressed', 'true'); } else { c.setAttribute('aria-pressed', 'false'); }
+        c.setAttribute('aria-pressed', on ? 'true' : 'false');
       });
       // 第三人称角色实时换装
-      if (this.playerChar) this.playerChar.setSkin(gender);
+      if (this.playerChar) { try { this.playerChar.setSkin(gender); } catch (e) {} }
       // 第一人称手臂颜色跟随角色
-      try { if (this.heldGroup) this._refreshHeldView(); } catch (e) {}
+      try { if (this.heldHolder) this._refreshHeldView(); } catch (e) {}
       // 立即持久化（开始游戏前也能记住），并同步到游戏存档
       try { localStorage.setItem('voxel_character_v1', gender); } catch (e) {}
       if (this.saveData) {
@@ -1326,18 +1433,96 @@ class Game {
       try { if (this.player) this._scheduleSave(); } catch (e) {}
       if (!silent) { try { this.sound && this.sound.click && this.sound.click(); } catch (e) {} }
     };
-    cards.forEach((c) => {
-      // pointerdown 最优先（手机触屏+桌面都能立即响应）；click 兜底
-      const onPick = (e) => {
+
+    // 去重 + 执行
+    let lastPick = 0;
+    let lastCard = '';
+    const fire = (key) => {
+      if (!VALID.includes(key)) return;
+      const now = Date.now();
+      if (key === lastCard && now - lastPick < 450) return;
+      lastPick = now; lastCard = key;
+      apply(key);
+    };
+
+    // 1) 直接给每张角色卡绑定（最可靠：不依赖 closest 委托、不被父层拦截）
+    cards().forEach((card) => {
+      const key = card.dataset.char;
+      if (!VALID.includes(key)) return;
+      card.style.cursor = 'pointer';
+      card.addEventListener('touchstart', (e) => { e.preventDefault(); e.stopPropagation(); fire(key); }, { passive: false });
+      card.addEventListener('pointerdown', (e) => { e.preventDefault(); e.stopPropagation(); fire(key); });
+      card.addEventListener('click', (e) => { e.preventDefault(); e.stopPropagation(); fire(key); });
+      // 键盘可达性（Enter/空格 选中）
+      card.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fire(key); }
+      });
+    });
+
+    // 2) document 捕获层兜底（扣子内嵌 WebView 对卡片自身事件不可靠时仍能命中）
+    const handle = (e) => {
+      const card = e.target && e.target.closest ? e.target.closest('#startScreen .char-card') : null;
+      if (!card || !card.dataset) return;
+      e.preventDefault();
+      e.stopPropagation();
+      fire(card.dataset.char);
+    };
+    document.addEventListener('touchstart', handle, { passive: false, capture: true });
+    document.addEventListener('pointerdown', handle, { capture: true });
+    document.addEventListener('click', handle, { capture: true });
+
+    apply(this.character, true);
+    this._charApply = apply;
+  }
+
+  /** 开始界面标签页切换（开始游戏 / 留言墙 / 存档更多） */
+  /** 开始界面两步引导：第 1 步欢迎+留言墙 → 第 2 步选特工+开始 */
+  _initStartSteps() {
+    const steps = Array.from(document.querySelectorAll('#startScreen .start-step'));
+    const dots = Array.from(document.querySelectorAll('#startScreen .step-dots .sd'));
+    const nextBtn = document.getElementById('stepNextBtn');
+    const backBtn = document.getElementById('stepBackBtn');
+    if (!steps.length) return;
+    let last = 0;
+    const show = (n) => {
+      steps.forEach((s) => {
+        const on = s.dataset.step === String(n);
+        s.classList.toggle('active', on);
+        s.hidden = !on;
+      });
+      dots.forEach((d) => d.classList.toggle('active', Number(d.textContent.trim()) === n));
+      try { this.sound && this.sound.click && this.sound.click(); } catch (err) {}
+    };
+    const bind = (el, fn) => {
+      if (!el) return;
+      const once = (e) => {
+        const now = Date.now();
+        if (now - last < 350) return;
+        last = now;
         e.preventDefault();
         e.stopPropagation();
-        if (e.stopImmediatePropagation) e.stopImmediatePropagation();
-        apply(c.dataset.char);
+        try { fn(); } catch (err) { console.warn('[steps] action fail', err); }
       };
-      c.addEventListener('pointerdown', onPick, true);
-      c.addEventListener('click', onPick);
-    });
-    apply(this.character, true);
+      // 直接绑定（最可靠）：触摸 + 点击
+      el.addEventListener('touchstart', once, { passive: false });
+      el.addEventListener('mousedown', once);
+      el.addEventListener('click', once);
+    };
+    bind(nextBtn, () => show(2));
+    bind(backBtn, () => show(1));
+    // 委托兜底：即便直接绑定因缓存/时序失效，document 层也能识别按钮 id
+    const delegate = (e) => {
+      const t = e.target && e.target.closest && e.target.closest('#stepNextBtn, #stepBackBtn');
+      if (!t) return;
+      const now = Date.now();
+      if (now - last < 350) return;
+      last = now;
+      e.preventDefault();
+      e.stopPropagation();
+      show(t.id === 'stepNextBtn' ? 2 : 1);
+    };
+    document.addEventListener('click', delegate);
+    document.addEventListener('touchstart', delegate, { passive: false });
   }
 
   /** 移动端「⋯」功能菜单：把键盘上的功能键变成可点按钮 */
@@ -1346,23 +1531,22 @@ class Game {
     const panel = document.getElementById('mMenuPanel');
     if (!btn || !panel) return;
 
-    // 仅在 pointerdown(捕获阶段) 真正执行业务一次；touchstart / click 只拦截、
-    // 不重复执行。真机触摸时 pointerdown 与 touchstart 都会来，若都执行会让
-    // “切换视角 / 飞行 / 背包”等开关类动作点两次（开了又关 = 没反应），拍照也会连拍。
+    // 兼容性最强的触摸方案：touchstart 是所有移动 WebView（含扣子 APP 内置浏览器）
+    // 都保证最先、最可靠触发的事件，作为主触发；pointerdown / click 作为桌面与兜底。
+    // 三者用时间戳去重，保证一次触摸只执行一次（开关类动作不会开了又关）。
     const singleFire = (el, action) => {
-      let locked = false;
-      const handler = (e) => {
+      let lastFire = 0;
+      const fire = (e) => {
         e.preventDefault();
         e.stopPropagation();
-        if (e.type !== 'pointerdown') return; // touchstart/click 仅拦截
-        if (locked) return;
-        locked = true;
-        setTimeout(() => { locked = false; }, 400);
+        const now = Date.now();
+        if (now - lastFire < 400) return; // 同一次触摸的后续事件，丢弃
+        lastFire = now;
         try { action(); } catch (err) { console.warn('[mobile-menu]', err); }
       };
-      el.addEventListener('pointerdown', handler, { capture: true });
-      el.addEventListener('touchstart', handler, { passive: false, capture: true });
-      el.addEventListener('click', handler);
+      el.addEventListener('touchstart', fire, { passive: false, capture: true });
+      el.addEventListener('pointerdown', fire, { capture: true });
+      el.addEventListener('click', fire, { capture: true });
     };
 
     singleFire(btn, () => panel.classList.toggle('open'));
@@ -1374,12 +1558,14 @@ class Game {
       });
     });
 
-    // 点击菜单以外区域收起（捕获阶段：菜单按钮/面板自身由上面的 singleFire 处理）
-    document.addEventListener('pointerdown', (e) => {
+    // 点击菜单以外区域收起（touchstart + pointerdown 都监听，兼容各类 WebView）
+    const onOutside = (e) => {
       if (panel.classList.contains('open') && !panel.contains(e.target) && !btn.contains(e.target)) {
         panel.classList.remove('open');
       }
-    }, { capture: true });
+    };
+    document.addEventListener('touchstart', onOutside, { passive: true, capture: true });
+    document.addEventListener('pointerdown', onOutside, { capture: true });
   }
 
   /** 移动端功能按钮对应的动作（复用键盘逻辑） */
@@ -1407,6 +1593,9 @@ class Game {
           break;
         case 'view':
           this.toggleView();
+          break;
+        case 'home':
+          this.teleportHome();
           break;
         case 'fly':
           this.player.flying = !this.player.flying;
@@ -1547,6 +1736,11 @@ class Game {
 
     // 天空飞鸟
     this.birdManager = new BirdManager(this.scene, this.isMobile ? 5 : 9);
+
+    // 花田/樱花区蝴蝶（数量少）
+    this.butterflyManager = new ButterflyManager(this.scene, this.isMobile ? 4 : 8);
+    // 漂浮光点小精灵（花田暖光，数量少）
+    this.fireflies = new Fireflies(this.scene, this.isMobile ? 14 : 26);
     // 樱花花瓣（出生在樱花林，始终飘一些花瓣增加氛围）
     this.sakura = new SakuraPetals(this.scene, this.isMobile ? 120 : 220);
 
@@ -1585,14 +1779,18 @@ class Game {
     this.playerChar.setVisible(this.viewMode === 'third');
     this.heldHolder.visible = this.viewMode === 'first';
     // 第三人称时把角色手持与盔甲同步
-    if (this.viewMode === 'third') this._syncCharacter();
+    if (this.viewMode === 'third') {
+      // 立即把角色放到玩家身上（避免等下一帧才出现 / 停在世界原点）
+      if (this.player) this.playerChar.update(this.player, 0);
+      this._syncCharacter();
+    }
     this._toast(this.viewMode === 'third' ? '第三人称视角 (V 切回)' : '第一人称视角 (V 切换)');
   }
 
   _syncCharacter() {
     if (!this.playerChar) return;
     // 盔甲：快捷栏内是否含胸甲/头盔
-    const hot = this.inventory.getHotbar();
+    const hot = (this.inventory && this.inventory.hotbar) ? this.inventory.hotbar : [];
     let armor = null;
     for (const id of hot) {
       if (typeof id === 'number' && id < 0) {
@@ -1641,7 +1839,9 @@ class Game {
     const hasDiamond = this._hotbarHasItem([-10, -9, -11, -12]);
     const hasIron = this._hotbarHasItem([-6, -5, -7, -8]);
     const armor = hasDiamond ? 'diamond' : hasIron ? 'iron' : null;
-    const agentKey = this.character || this._getSelectedChar();
+    // 以本地存储中“当前所选角色”为唯一真相，避免 this.character 时序问题导致手臂回退成默认汉堡
+    const agentKey = this._getSelectedChar();
+    this.character = agentKey;
     const armColors = armor ? null : (AGENT_ARMS[agentKey] || null);
     const arm = createArmModel(armor, armColors);
     arm.position.set(0.62, -0.62, -0.5);
@@ -2005,6 +2205,11 @@ class Game {
         if (this.tutorial._dismissed) this.tutorial.show();
         else this.tutorial.dismiss();
       }
+
+      // R 键：一键回到出生家园（防迷路/卡住）
+      if (e.code === 'KeyR' && !e.ctrlKey && !e.metaKey) {
+        this.teleportHome();
+      }
     });
 
     document.addEventListener('keyup', (e) => {
@@ -2092,7 +2297,9 @@ class Game {
 
       const enterGame = () => {
         // 确保已同步当前选择的主角，避免“先进游戏后卡片没生效”
-        if (this.playerChar && this.character) this.playerChar.setSkin(this.character);
+        this.character = this._getSelectedChar(); if (this.playerChar) this.playerChar.setSkin(this.character);
+        // 第一人称手臂颜色也按所选角色重建
+        try { this._refreshHeldView(); } catch (e) {}
         this.isRunning = true;
         this.ui.startScreen.style.display = 'none';
         this.sound.unlock();
@@ -2127,7 +2334,9 @@ class Game {
     // ----- 移动端：直接进入游戏 + 触摸控制 -----
     if (this.isMobile) {
       const enterGameMobile = () => {
-        if (this.playerChar && this.character) this.playerChar.setSkin(this.character);
+        this.character = this._getSelectedChar(); if (this.playerChar) this.playerChar.setSkin(this.character);
+        // 第一人称手臂颜色也按所选角色重建
+        try { this._refreshHeldView(); } catch (e) {}
         this.isRunning = true;
         this.ui.startScreen.style.display = 'none';
         this.sound.unlock();
@@ -2345,9 +2554,16 @@ class Game {
       );
     }
 
-    // 昼夜循环（始终更新）
+    // 昼夜循环（始终更新），并按玩家所在群系给远景雾轻微染色（空气透视）
     if (this.dayNight) {
-      this.dayNight.update(dt, this.camera);
+      let biomeFogColor = null;
+      try {
+        if (this.world && this.world.getBiomeFogColor) {
+          biomeFogColor = this.world.getBiomeFogColor(
+            Math.floor(this.player.position.x), Math.floor(this.player.position.z));
+        }
+      } catch (e) { biomeFogColor = null; }
+      this.dayNight.update(dt, this.camera, { biomeFogColor });
     }
 
     // 生物 AI
@@ -2370,9 +2586,37 @@ class Game {
       this.birdManager.update(dt, this.player.position);
     }
 
-    // 樱花花瓣
+    // 花田蝴蝶
+    if (this.butterflyManager) {
+      this.butterflyManager.update(dt, this.player.position);
+    }
+    // 漂浮光点小精灵
+    if (this.fireflies) {
+      this.fireflies.update(dt, this.player.position);
+    }
+
+    // 樱花花瓣：仅在樱花林或出生家园附近飘落（密度按环境平滑变化）
     if (this.sakura) {
+      let density = 0;
+      try {
+        const px = Math.floor(this.player.position.x);
+        const pz = Math.floor(this.player.position.z);
+        if (this.world && this.world.getBiome) {
+          const biome = this.world.getBiome(px, pz);
+          if (biome === Biome.CHERRY) density = 1;
+        }
+        // 出生家园（半径 ~30 内）也有少量花瓣，烘托梦幻出生区
+        const dHome = Math.hypot(px, pz);
+        if (dHome < 34) density = Math.max(density, 0.55);
+        else if (dHome < 50) density = Math.max(density, 0.25);
+      } catch (e) { density = 0; }
+      this.sakura.setDensity(density);
       this.sakura.update(dt, this.player.position);
+    }
+
+    // 出生区风车磨坊叶片旋转
+    if (this.windmill) {
+      this.windmill.update(dt);
     }
 
     // 手持视图轻微摆动
@@ -2441,7 +2685,7 @@ window.addEventListener('DOMContentLoaded', async () => {
   }
   // 即使 init 部分失败，也尽量启动主循环，避免"点击开始无反应"
   try {
-    if (game) game.animate();
+    if (game) { game.animate(); window.__gameLoaded = true; }
   } catch (err) {
     console.error('[animate 启动失败]', err);
   }

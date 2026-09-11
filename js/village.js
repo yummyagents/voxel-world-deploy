@@ -1,6 +1,6 @@
 import * as THREE from 'three';
-import { BlockType, CHUNK_HEIGHT, Biome } from './voxel.js?v=20260924d';
-import { SimplexNoise } from './noise.js?v=20260924d';
+import { BlockType, CHUNK_HEIGHT, Biome } from './voxel.js?v=20260925l';
+import { SimplexNoise } from './noise.js?v=20260925l';
 
 /**
  * 村庄生成系统
@@ -25,17 +25,17 @@ export class VillageGenerator {
     if (this.generatedChunks.has(key)) return;
     this.generatedChunks.add(key);
 
-    // 用区块坐标做确定性判定：约 3% 的区块成为村庄中心
+    // 用区块坐标做确定性判定：约 6% 的区块成为村庄中心（提高野外遇见农庄的概率）
     const r = this._hash(chunk.cx, chunk.cz);
-    if (r > 0.97) {
+    if (r > 0.94) {
       const wx = chunk.cx * 16 + 8;
       const wz = chunk.cz * 16 + 8;
       // 必须在平原或热带草原
       const biome = this.world.getBiome(wx, wz);
       if (biome !== Biome.PLAINS && biome !== Biome.SAVANNA) return;
-      // 必须平坦
+      // 必须较平坦（适当放宽高度范围，让村庄更常见）
       const surfaceY = this.world.getSurfaceHeight(wx, wz);
-      if (surfaceY < 20 || surfaceY > 36) return;
+      if (surfaceY < 18 || surfaceY > 40) return;
       // 与其他村庄距离检查
       for (const v of this.villages) {
         const dx = v.x - wx, dz = v.z - wz;
@@ -43,6 +43,29 @@ export class VillageGenerator {
       }
       this._generateVillage(wx, surfaceY, wz);
     }
+  }
+
+  /**
+   * 强制在指定世界坐标生成一个村庄（用于保证出生点附近一定有农庄）。
+   * 跳过随机/群系/平坦判定，内部会先平整出一块广场。返回村庄中心 {x,y,z} 或 null。
+   */
+  forceVillageAt(wx, wz) {
+    const key = `force:${wx},${wz}`;
+    if (this.generatedChunks.has(key)) return null;
+    this.generatedChunks.add(key);
+    // 取当前地表高度，平整广场
+    let surfaceY;
+    try {
+      surfaceY = this.world.getSurfaceHeight(Math.floor(wx), Math.floor(wz));
+      if (!Number.isFinite(surfaceY) || surfaceY <= 0) surfaceY = 26;
+    } catch (_) { surfaceY = 26; }
+    // 与已有村庄保持距离，避免重叠
+    for (const v of this.villages) {
+      const dx = v.x - wx, dz = v.z - wz;
+      if (dx * dx + dz * dz < this.villageSpacing * this.villageSpacing) return null;
+    }
+    this._generateVillage(wx, surfaceY, wz);
+    return { x: wx, y: surfaceY, z: wz };
   }
 
   _hash(x, z) {
@@ -111,11 +134,11 @@ export class VillageGenerator {
           if (cur === BlockType.AIR || cur === BlockType.WATER) continue;
           if (y < targetY - 1) {
             if (cur !== BlockType.STONE && cur !== BlockType.DIRT)
-              this.world.setBlock(wx, y, wz, BlockType.DIRT);
+              this.world.setBlockGen(wx, y, wz, BlockType.DIRT);
           } else if (y === targetY - 1) {
-            this.world.setBlock(wx, y, wz, BlockType.GRASS);
+            this.world.setBlockGen(wx, y, wz, BlockType.GRASS);
           } else {
-            this.world.setBlock(wx, y, wz, BlockType.AIR);
+            this.world.setBlockGen(wx, y, wz, BlockType.AIR);
           }
         }
       }
@@ -128,7 +151,7 @@ export class VillageGenerator {
     // 地基（圆石）
     for (let dx = 0; dx < w; dx++) {
       for (let dz = 0; dz < d; dz++) {
-        this.world.setBlock(sx + dx, sy - 1, sz + dz, BlockType.COBBLESTONE);
+        this.world.setBlockGen(sx + dx, sy - 1, sz + dz, BlockType.COBBLESTONE);
       }
     }
     // 墙（木板）
@@ -141,11 +164,11 @@ export class VillageGenerator {
           if (dz === 0 && dx === (w >> 1) && (y === 0 || y === 1)) continue;
           // 窗户（玻璃）
           if ((dx === 0 || dx === w - 1) && dz === (d >> 1) && (y === 1 || y === 2)) {
-            this.world.setBlock(sx + dx, sy + y, sz + dz, BlockType.GLASS);
+            this.world.setBlockGen(sx + dx, sy + y, sz + dz, BlockType.GLASS);
             continue;
           }
           if (y === h - 1) continue; // 顶部留给屋顶
-          this.world.setBlock(sx + dx, sy + y, sz + dz, BlockType.PLANKS);
+          this.world.setBlockGen(sx + dx, sy + y, sz + dz, BlockType.PLANKS);
         }
       }
     }
@@ -154,9 +177,9 @@ export class VillageGenerator {
       for (let dx = -layer; dx < w + layer; dx++) {
         for (let dz = -layer; dz < d + layer; dz++) {
           if (dx < 0 || dx >= w || dz < 0 || dz >= d) {
-            this.world.setBlock(sx + dx, sy + h - 1 + layer, sz + dz, BlockType.BRICK);
+            this.world.setBlockGen(sx + dx, sy + h - 1 + layer, sz + dz, BlockType.BRICK);
           } else if (layer === 0) {
-            this.world.setBlock(sx + dx, sy + h - 1 + layer, sz + dz, BlockType.BRICK);
+            this.world.setBlockGen(sx + dx, sy + h - 1 + layer, sz + dz, BlockType.BRICK);
           }
         }
       }
@@ -164,7 +187,7 @@ export class VillageGenerator {
     // 屋内地板（木板）
     for (let dx = 1; dx < w - 1; dx++) {
       for (let dz = 1; dz < d - 1; dz++) {
-        this.world.setBlock(sx + dx, sy, sz + dz, BlockType.PLANKS);
+        this.world.setBlockGen(sx + dx, sy, sz + dz, BlockType.PLANKS);
       }
     }
   }
@@ -174,34 +197,68 @@ export class VillageGenerator {
     // 3x3 水坑
     for (let dx = -1; dx <= 1; dx++) {
       for (let dz = -1; dz <= 1; dz++) {
-        this.world.setBlock(cx + dx, cy - 1, cz + dz, BlockType.COBBLESTONE);
-        this.world.setBlock(cx + dx, cy, cz + dz, BlockType.WATER);
+        this.world.setBlockGen(cx + dx, cy - 1, cz + dz, BlockType.COBBLESTONE);
+        this.world.setBlockGen(cx + dx, cy, cz + dz, BlockType.WATER);
       }
     }
     // 4根柱子
     for (const [dx, dz] of [[-1,-1],[1,-1],[-1,1],[1,1]]) {
       for (let y = 0; y < 3; y++) {
-        this.world.setBlock(cx + dx, cy + y, cz + dz, BlockType.COBBLESTONE);
+        this.world.setBlockGen(cx + dx, cy + y, cz + dz, BlockType.COBBLESTONE);
       }
     }
     // 顶
     for (let dx = -1; dx <= 1; dx++) {
       for (let dz = -1; dz <= 1; dz++) {
-        this.world.setBlock(cx + dx, cy + 3, cz + dz, BlockType.PLANKS);
+        this.world.setBlockGen(cx + dx, cy + 3, cz + dz, BlockType.PLANKS);
       }
     }
   }
 
-  /** 土路（简化：两点间铺草径） */
+  /** 土路（略微蜿蜒 + 两侧夹道灯笼/花），连接中心与房屋 */
   _buildPath(x1, z1, x2, z2, y) {
     const steps = Math.max(Math.abs(x2 - x1), Math.abs(z2 - z1));
+    // 路径方向的法向量（用于把灯笼/花放到路两侧）
+    const dx = x2 - x1, dz = z2 - z1;
+    const len = Math.hypot(dx, dz) || 1;
+    const nx = -dz / len, nz = dx / len; // 垂直于路径的单位向量
+
     for (let i = 0; i <= steps; i++) {
       const t = i / steps;
-      const px = Math.floor(x1 + (x2 - x1) * t);
-      const pz = Math.floor(z1 + (z2 - z1) * t);
-      const cur = this.world.getBlock(px, y - 1, pz);
-      if (cur === BlockType.GRASS || cur === BlockType.DIRT) {
-        this.world.setBlock(px, y - 1, pz, BlockType.GRAVEL);
+      // 轻微蜿蜒：中段加一点横向偏移，避免笔直生硬
+      const sway = Math.sin(t * Math.PI) * (steps > 6 ? 1.2 : 0);
+      const baseX = x1 + dx * t + nx * sway;
+      const baseZ = z1 + dz * t + nz * sway;
+      const px = Math.floor(baseX);
+      const pz = Math.floor(baseZ);
+      const py = this.world.getSurfaceHeight(px, pz);
+      const cur = this.world.getBlock(px, py, pz);
+      if (cur === BlockType.GRASS || cur === BlockType.DIRT || cur === BlockType.PODZOL) {
+        this.world.setBlockGen(px, py, pz, BlockType.GRAVEL);
+      }
+
+      // 每隔 4 格在路两侧放一根灯笼柱（栅栏+灯笼），中间夹杂小花
+      if (i > 0 && i % 4 === 0) {
+        for (const side of [1, -1]) {
+          const sx = Math.floor(baseX + nx * 2.2 * side);
+          const sz = Math.floor(baseZ + nz * 2.2 * side);
+          const sy = this.world.getSurfaceHeight(sx, sz);
+          const ground = this.world.getBlock(sx, sy, sz);
+          if (ground !== BlockType.GRASS && ground !== BlockType.DIRT) continue;
+          const r = this._hash(sx * 3 + i, sz * 7 + i);
+          if (r < 0.45) {
+            // 灯笼柱：两根栅栏 + 顶灯笼
+            this.world.setBlockGen(sx, sy + 1, sz, BlockType.FENCE);
+            this.world.setBlockGen(sx, sy + 2, sz, BlockType.FENCE);
+            this.world.setBlockGen(sx, sy + 3, sz, BlockType.LANTERN);
+          } else if (r < 0.8) {
+            // 小花/高草点缀
+            const dec = r < 0.6 ? [BlockType.FLOWER_RED, BlockType.FLOWER_YELLOW, BlockType.FLOWER_WHITE][Math.floor(r * 30) % 3] : BlockType.TALL_GRASS;
+            if (this.world.getBlock(sx, sy + 1, sz) === BlockType.AIR) {
+              this.world.setBlockGen(sx, sy + 1, sz, dec);
+            }
+          }
+        }
       }
     }
   }

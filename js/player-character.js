@@ -335,16 +335,34 @@ export class PlayerCharacter {
     this.group.visible = v;
   }
 
-  update(dt, moving, inAir) {
+  /**
+   * 每帧更新：跟随玩家位置/朝向 + 走路摆臂摆腿。
+   * 注意：签名是 update(player, dt)，player 提供位置/速度/着地状态。
+   * 模型本地原点在脚踝附近（脚底约 -0.23），所以整体抬升 0.25 对齐玩家脚部。
+   */
+  update(player, dt) {
+    if (!player || !player.position) return;
+    // 位置：完整角色跟随玩家身体（第三视角时人物出现在玩家身上，而不是停在世界原点）
+    const moving = player.velocity
+      ? (Math.abs(player.velocity.x) + Math.abs(player.velocity.z)) > 0.6
+      : false;
+    const inAir = player.onGround === false;
+    this.group.position.set(
+      player.position.x,
+      player.position.y + 0.25,
+      player.position.z
+    );
+    // 朝向：模型正面朝 +Z，玩家视线前向为 (-sin yaw, -cos yaw)，故 rotation.y = yaw + π
+    if (typeof player.yaw === 'number') this.group.rotation.y = player.yaw + Math.PI;
     // 走路摆臂/摆腿
-    if (moving && !inAir) this.walkPhase += dt * 9;
+    if (moving && !inAir) this.walkPhase += (dt || 0.016) * 9;
     const swing = moving && !inAir ? Math.sin(this.walkPhase) * 0.7 : 0;
     this.bodyMeshes.armL.rotation.x = swing;
     this.bodyMeshes.armR.rotation.x = -swing;
     this.bodyMeshes.legL.rotation.x = -swing;
     this.bodyMeshes.legR.rotation.x = swing;
-    // 身体轻微上下
+    // 走路时身体轻微上下（叠加在跟随高度上，不再覆盖整体 y）
     const bob = moving && !inAir ? Math.abs(Math.sin(this.walkPhase)) * 0.04 : 0;
-    this.group.position.y = bob;
+    this.group.position.y += bob;
   }
 }

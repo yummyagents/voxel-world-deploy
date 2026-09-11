@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
   <meta name="description" content="像素方块世界 - 3D像素风格方块世界探索游戏" />
   <title>美味特工队 · 像素方块训练基地</title>
-  <link rel="stylesheet" href="./styles/main.css?v=20260924d" />
+  <link rel="stylesheet" href="./styles/main.css?v=20260925l" />
   <!-- 使用 importmap 引入 Three.js ES Module -->
   <script type="importmap">
   {
@@ -75,60 +75,75 @@
   <!-- 开始界面 -->
   <div id="startScreen">
    <div class="start-inner">
-    <div class="start-hero">
-      <div class="start-brand"><span class="brand-cube"></span>美味特工队 · YUMMY AGENTS 出品</div>
+    <!-- 步骤指示器 -->
+    <div class="step-dots" aria-hidden="true">
+      <span class="sd active">1</span><i class="sd-line"></i><span class="sd">2</span>
+    </div>
 
-      <div class="logo-lockup">
-        <div class="logo-cube" aria-hidden="true">
-          <div class="cube-face cube-top"></div>
-          <div class="cube-face cube-left"></div>
-          <div class="cube-face cube-right"></div>
-          <div class="cube-eyes"><i></i><i></i></div>
+    <!-- 第 1 步：欢迎语 + 留言墙 -->
+    <div class="start-step active" data-step="1">
+      <div class="start-hero">
+        <div class="logo-lockup">
+          <div class="logo-cube" aria-hidden="true">
+            <div class="cube-face cube-top"></div>
+            <div class="cube-face cube-left"></div>
+            <div class="cube-face cube-right"></div>
+            <div class="cube-eyes"><i></i><i></i></div>
+          </div>
+          <h1 class="game-logo"><span class="logo-zh">像素方块世界</span></h1>
+          <div class="logo-en">PIXEL&nbsp;BLOCK&nbsp;WORLD</div>
+          <div class="logo-rule"><span></span><em>像素方块训练基地</em><span></span></div>
         </div>
-        <h1 class="game-logo"><span class="logo-zh">像素方块世界</span></h1>
-        <div class="logo-en">PIXEL&nbsp;BLOCK&nbsp;WORLD</div>
-        <div class="logo-rule"><span></span><em>像素方块训练基地</em><span></span></div>
       </div>
 
       <div class="start-welcome">欢迎来到美味特工队像素方块基地！<br>自由建造 · 探索世界 · 和小动物做朋友～</div>
 
-      <!-- 主角选择（美味特工队） -->
-      <div class="char-select">
-        <div class="char-select-label">选择你的美味特工 <span class="char-select-sub">美味特工队 · Yummy Agents</span></div>
-        <div class="char-options char-options-4">
-          <button class="char-card" data-char="burger" type="button">
-            <span class="agent-ico agent-burger"><i class="ag-hat"></i><i class="ag-cap"></i><b class="ag-eye"></b><b class="ag-eye"></b><i class="ag-mask"></i><i class="ag-body"></i></span>
-            <span class="char-name">汉堡特工</span>
-            <span class="char-check">✓</span>
-          </button>
-          <button class="char-card" data-char="fries" type="button">
-            <span class="agent-ico agent-fries"><i class="ag-fries"></i><i class="ag-chefhat"></i><i class="ag-hair"></i><b class="ag-eye ag-eye-red"></b><b class="ag-eye ag-eye-red"></b><i class="ag-mask ag-mask-white"></i><i class="ag-body ag-body-green"></i></span>
-            <span class="char-name">薯条厨娘</span>
-            <span class="char-check">✓</span>
-          </button>
-          <button class="char-card" data-char="popcorn" type="button">
-            <span class="agent-ico agent-popcorn"><i class="ag-puffs"></i><b class="ag-eye ag-eye-white"></b><b class="ag-eye ag-eye-white"></b><i class="ag-body ag-body-purple"></i></span>
-            <span class="char-name">鸡米花小弟</span>
-            <span class="char-check">✓</span>
-          </button>
-          <button class="char-card" data-char="witch" type="button">
-            <span class="agent-ico agent-witch"><i class="ag-hair"></i><i class="ag-hat"></i><i class="ag-hatbrim"></i><b class="ag-eye"></b><b class="ag-eye"></b><i class="ag-body ag-body-witch"></i></span>
-            <span class="char-name">魔法小女巫</span>
-            <span class="char-check">✓</span>
-          </button>
-        </div>
+      <div class="step-box">
+        <div class="step-box-title">💬 大家的留言墙</div>
+        <div id="communityMount"></div>
+        <div class="tab-hint">这里能看到访客数、给游戏点赞、留下你的留言～（留言需妈妈审核后展示）</div>
       </div>
+
+      <button id="stepNextBtn" class="start-play-btn" type="button">
+        <span class="spb-arrow">▶</span> 下一步：选特工 <span class="spb-arrow">▶</span>
+      </button>
+      <a class="admin-link" href="./admin.html" target="_blank" rel="noopener" onclick="event.stopPropagation()">🔒 妈妈留言审核台</a>
     </div>
 
-    <!-- 明确的大开始按钮（只能点这里开始，避免误触） -->
-    <button id="startPlayBtn" class="start-play-btn" type="button">
-      <span class="spb-arrow">▶</span> 点击开始游戏 <span class="spb-arrow">▶</span>
-    </button>
+    <!-- 第 2 步：选角色 + 开始 / 存档 -->
+    <div class="start-step" data-step="2" hidden>
+      <div class="step-title">准备出发，选一位美味特工！</div>
+        <div class="char-select">
+          <div class="char-select-label">选择你的美味特工 <span class="char-select-sub">美味特工队 · Yummy Agents</span></div>
+          <div class="char-options char-options-4">
+            <button class="char-card" data-char="burger" type="button">
+              <span class="agent-ico agent-burger"><i class="ag-hat"></i><i class="ag-cap"></i><b class="ag-eye"></b><b class="ag-eye"></b><i class="ag-mask"></i><i class="ag-body"></i></span>
+              <span class="char-name">汉堡特工</span>
+              <span class="char-check">✓</span>
+            </button>
+            <button class="char-card" data-char="fries" type="button">
+              <span class="agent-ico agent-fries"><i class="ag-fries"></i><i class="ag-chefhat"></i><i class="ag-hair"></i><b class="ag-eye ag-eye-red"></b><b class="ag-eye ag-eye-red"></b><i class="ag-mask ag-mask-white"></i><i class="ag-body ag-body-green"></i></span>
+              <span class="char-name">薯条厨娘</span>
+              <span class="char-check">✓</span>
+            </button>
+            <button class="char-card" data-char="popcorn" type="button">
+              <span class="agent-ico agent-popcorn"><i class="ag-puffs"></i><b class="ag-eye ag-eye-white"></b><b class="ag-eye ag-eye-white"></b><i class="ag-body ag-body-purple"></i></span>
+              <span class="char-name">鸡米花小弟</span>
+              <span class="char-check">✓</span>
+            </button>
+            <button class="char-card" data-char="witch" type="button">
+              <span class="agent-ico agent-witch"><i class="ag-hair"></i><i class="ag-hat"></i><i class="ag-hatbrim"></i><b class="ag-eye"></b><b class="ag-eye"></b><i class="ag-body ag-body-witch"></i></span>
+              <span class="char-name">魔法小女巫</span>
+              <span class="char-check">✓</span>
+            </button>
+          </div>
+        </div>
 
-    <!-- 社区功能挂载点（访客计数 / 点赞 / 留言，需在 js/config.js 填好 Supabase 后显示） -->
-    <div id="communityMount"></div>
+      <!-- 开始按钮 -->
+      <button id="startPlayBtn" class="start-play-btn" type="button">
+        <span class="spb-arrow">▶</span> 开始冒险 <span class="spb-arrow">▶</span>
+      </button>
 
-    <!-- 存档菜单 -->
     <div class="save-menu" id="saveMenu">
       <button id="continueBtn" class="save-btn save-btn-primary" style="display:none">继续上次世界</button>
       <button id="newWorldBtn" class="save-btn">开新世界</button>
@@ -165,7 +180,8 @@
       </div>
     </details>
 
-    <a class="admin-link" href="./admin.html" target="_blank" rel="noopener" onclick="event.stopPropagation()">🔒 妈妈留言审核台</a>
+      <button id="stepBackBtn" class="step-back" type="button">‹ 返回留言墙</button>
+    </div>
    </div>
   </div>
 
@@ -191,6 +207,7 @@
       <button class="m-fn" data-fn="shop" type="button">🛒<span>商店</span></button>
       <button class="m-fn" data-fn="view" type="button">👁️<span>视角</span></button>
       <button class="m-fn" data-fn="fly" type="button">🕊️<span>飞行</span></button>
+      <button class="m-fn" data-fn="home" type="button">🏠<span>回家</span></button>
       <button class="m-fn" data-fn="weather" type="button">🌦️<span>天气</span></button>
       <button class="m-fn" data-fn="help" type="button">❓<span>说明</span></button>
     </div>
@@ -205,13 +222,32 @@
 
   <!-- 社区功能引导（开始界面的计数/点赞/留言） -->
   <script type="module">
-    import { Community } from './js/community.js?v=20260924d';
+    import { Community } from './js/community.js?v=20260925l';
     try {
       const mount = document.getElementById('communityMount');
       if (mount) { const c = new Community(); c.mount(mount); }
     } catch (e) { console.warn('[community] 加载失败', e); }
   </script>
 
-  <script type="module" src="./js/game.js?v=20260924d"></script>
+  <script type="module" src="./js/game.js?v=20260925l"></script>
+
+  <!-- 兜底：模块若加载失败或卡住，给出可见提示而不是无限"生成世界中..." -->
+  <script>
+    window.__gameLoaded = false;
+    window.addEventListener('load', () => {
+      setTimeout(() => {
+        if (window.__gameLoaded) return;
+        // 用 loadingBar 文案提示用户强刷（多数为缓存/边缘未更新导致）
+        const bar = document.getElementById('loadingBar');
+        const txt = bar && bar.querySelector('.loading-text');
+        if (txt && bar.style.display !== 'none') {
+          txt.innerHTML = '加载有点慢，可能是缓存～<br>请下拉刷新或关掉预览重新打开';
+        }
+      }, 9000);
+    });
+    window.addEventListener('error', (e) => {
+      console.error('[页面错误]', e.message, e.filename);
+    }, true);
+  </script>
 </body>
 </html>

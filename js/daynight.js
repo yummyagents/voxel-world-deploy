@@ -23,12 +23,12 @@ export class DayNightCycle {
     scene.add(this.sunLight);
     scene.add(this.sunLight.target);
 
-    // 环境光
-    this.ambient = new THREE.AmbientLight(0xffffff, 0.5);
+    // 环境光（略提亮，让暗部柔和、不死黑，儿童向更明快）
+    this.ambient = new THREE.AmbientLight(0xffffff, 0.62);
     scene.add(this.ambient);
 
-    // 半球光（天/地色反射）
-    this.hemi = new THREE.HemisphereLight(0x88aaff, 0x445533, 0.4);
+    // 半球光（天/地色反射）：天空暖蓝、地面嫩草绿
+    this.hemi = new THREE.HemisphereLight(0xbfe0ff, 0x6a8a4a, 0.55);
     scene.add(this.hemi);
 
     // 太阳 mesh（自发光方块）
@@ -36,6 +36,15 @@ export class DayNightCycle {
     const sunMat = new THREE.MeshBasicMaterial({ color: 0xffee88, fog: false });
     this.sunMesh = new THREE.Mesh(sunGeo, sunMat);
     scene.add(this.sunMesh);
+
+    // 太阳柔和光晕（暖色径向渐变 Sprite，始终朝向相机）
+    this.sunGlowTex = this._makeGlowTexture();
+    this.sunGlow = new THREE.Sprite(new THREE.SpriteMaterial({
+      map: this.sunGlowTex, color: 0xffe9b0, transparent: true,
+      blending: THREE.AdditiveBlending, depthWrite: false, fog: false, opacity: 0.9,
+    }));
+    this.sunGlow.scale.set(90, 90, 1);
+    scene.add(this.sunGlow);
 
     // 月亮 mesh
     const moonGeo = new THREE.BoxGeometry(6, 6, 6);
@@ -45,10 +54,60 @@ export class DayNightCycle {
 
     // 星空
     this._createStars();
+
+    // 体素云（方块感白云，缓慢漂移）
+    this._createClouds();
   }
 
-  _createStars() {
-    const count = 800;
+  /** 生成柔和径向光晕贴图（太阳/暖色辉光用） */
+  _makeGlowTexture() {
+    const s = 128;
+    const c = document.createElement('canvas');
+    c.width = c.height = s;
+    const g = c.getContext('2d');
+    const grad = g.createRadialGradient(s / 2, s / 2, 0, s / 2, s / 2, s / 2);
+    grad.addColorStop(0, 'rgba(255,246,214,0.95)');
+    grad.addColorStop(0.25, 'rgba(255,232,170,0.55)');
+    grad.addColorStop(0.6, 'rgba(255,214,140,0.18)');
+    grad.addColorStop(1, 'rgba(255,214,140,0)');
+    g.fillStyle = grad;
+    g.fillRect(0, 0, s, s);
+    const tex = new THREE.CanvasTexture(c);
+    return tex;
+  }
+
+  _createClouds() {
+    this.clouds = [];
+    // 用白色半透明方块拼出几朵蓬松的体素云，分布在玩家周围高空
+    const N = 9;                 // 云朵数量
+    const SPREAD = 260;          // 水平分布半径
+    const CLOUD_Y = 78;          // 云的高度
+    const cloudMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.85, fog: false });
+    for (let i = 0; i < N; i++) {
+      const g = new THREE.Group();
+      const w = 4 + ((Math.random() * 4) | 0);   // 宽 4~7 块
+      const d = 3 + ((Math.random() * 3) | 0);   // 深 3~5 块
+      for (let x = 0; x < w; x++) {
+        for (let z = 0; z < d; z++) {
+          // 边缘做一点高低错落，像蓬松的云团
+          const edge = (x === 0 || x === w - 1 || z === 0 || z === d - 1);
+          if (edge && Math.random() < 0.45) continue;
+          const top = (Math.random() < 0.4) ? 1 : 0;
+          for (let y = 0; y <= top; y++) {
+            const m = new THREE.Mesh(new THREE.BoxGeometry(4, 2.2, 4), cloudMat);
+            m.position.set(x * 4 - w * 2, y * 2, z * 4 - d * 2);
+            g.add(m);
+          }
+        }
+      }
+      g.position.set((Math.random() - 0.5) * SPREAD * 2, CLOUD_Y + Math.random() * 8, (Math.random() - 0.5) * SPREAD * 2);
+      g.userData.speed = 0.6 + Math.random() * 0.7;  // 漂移速度
+      this.scene.add(g);
+      this.clouds.push(g);
+    }
+  }
+
+  _createStars() {    const count = 800;
     const positions = new Float32Array(count * 3);
     for (let i = 0; i < count; i++) {
       // 随机分布在半球天空
@@ -84,6 +143,16 @@ export class DayNightCycle {
 
     // 月亮在太阳对面
     this.moonMesh.position.set(-sx, -sy, sz);
+    // 光晕跟随太阳
+    if (this.sunGlow) {
+      this.sunGlow.position.set(sx * 0.9, sy * 0.9, sz);
+      // 太阳高度越低（日出日落）光晕越大越柔；地平线下隐藏
+      const h = Math.max(0, Math.sin(angle));
+      this.sunGlow.visible = h > 0.02;
+      this.sunGlow.material.opacity = 0.55 + h * 0.4;
+      const sc = 90 + (1 - h) * 40;
+      this.sunGlow.scale.set(sc, sc, 1);
+    }
   }
 
   /** 根据时间返回天色、光强等关键值 */
@@ -127,7 +196,7 @@ export class DayNightCycle {
     return { sky: phases[2].sky, fog: phases[2].fog, amb: 0.65, sun: 1.2, hemi: 0.55 };
   }
 
-  update(dt, camera) {
+  update(dt, camera, opts = {}) {
     this._updateSun(dt);
 
     const p = this._getPhase();
@@ -139,6 +208,15 @@ export class DayNightCycle {
       sky.lerp(this._skyTint, this._skyTintAmt);
       fog.lerp(this._skyTint, this._skyTintAmt);
     }
+    // 群系雾色（空气透视）：白天明亮时段，把远景雾轻微染成当前群系色调
+    if (opts.biomeFogColor != null && this.sunAngle > 0) {
+      const dayAmt = Math.min(1, Math.max(0, Math.sin(this.sunAngle))); // 地平线附近减弱
+      const tint = opts.biomeFogColor instanceof THREE.Color
+        ? opts.biomeFogColor
+        : new THREE.Color(opts.biomeFogColor);
+      fog.lerp(tint, 0.45 * dayAmt);
+      sky.lerp(tint, 0.18 * dayAmt);
+    }
     this.scene.background = sky;
     if (this.scene.fog) this.scene.fog.color = fog;
 
@@ -149,8 +227,8 @@ export class DayNightCycle {
 
     // 太阳/月亮颜色随阶段微调
     if (this.sunAngle > 0) {
-      // 白天
-      this.sunLight.color.setHex(0xffffff);
+      // 白天：暖调阳光（略偏奶油白），配合更高环境光让阴影柔和不死黑
+      this.sunLight.color.setHex(0xfff6e0);
       this.sunMesh.visible = true;
       this.moonMesh.visible = false;
     } else {
@@ -168,6 +246,25 @@ export class DayNightCycle {
     // 星空跟随玩家
     if (camera) {
       this.stars.position.copy(camera.position);
+      // 体素云缓慢向东漂移；整体跟随玩家位置（在玩家周围范围内循环）
+      const SPREAD = 260;
+      for (const c of this.clouds) {
+        c.position.x += c.userData.speed * dt;
+        // 相对玩家的位置，超出范围则绕回，保持始终有云在头顶
+        let rx = c.position.x - camera.position.x;
+        let rz = c.position.z - camera.position.z;
+        if (rx > SPREAD) c.position.x -= SPREAD * 2;
+        if (rx < -SPREAD) c.position.x += SPREAD * 2;
+        if (rz > SPREAD) c.position.z -= SPREAD * 2;
+        if (rz < -SPREAD) c.position.z += SPREAD * 2;
+      }
+      // 夜晚云变暗一点（与天色协调）
+      const dayAmt = Math.min(1, Math.max(0, Math.sin(this.sunAngle) * 1.3 + 0.1));
+      for (const c of this.clouds) {
+        for (const m of c.children) {
+          m.material.opacity = 0.25 + 0.6 * dayAmt;
+        }
+      }
     }
   }
 

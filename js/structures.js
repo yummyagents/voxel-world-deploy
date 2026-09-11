@@ -8,13 +8,18 @@
 // - WELCOME 欢迎拱门（回家入口）
 // - 通往外部世界的小路 + 围栏
 // 所有方块用 world.setBlockGen 写入（属于世界生成，不计入玩家改动存档）。
-import { BlockType, CHUNK_HEIGHT, SEA_LEVEL } from './voxel.js?v=20260924d';
+import { BlockType, CHUNK_HEIGHT, SEA_LEVEL } from './voxel.js?v=20260925l';
 
 // 家园坐标中心（世界原点），出生点在家园南侧空地
 export const HOME_CX = 0;
 export const HOME_CZ = 0;
 export const HOME_GROUND_Y = 26;      // 平整后的草地高度
-export const PLAYER_SPAWN = { x: 0.5, y: HOME_GROUND_Y + 2, z: 16.5 };
+export const PLAYER_SPAWN = { x: 0.5, y: HOME_GROUND_Y + 2, z: 27.5 };
+
+// 出生点核心地标坐标：WELCOME 粉色拱门与樱花风车房都在出生点正前方（南侧广场）。
+// 玩家出生在拱门以南、面朝北（yaw=π），穿过拱门正对樱花风车房。
+export const SPAWN_ARCH_Z = HOME_CZ + 24;   // 粉色 WELCOME 拱门所在行
+export const SPAWN_WINDMILL_Z = HOME_CZ + 13; // 樱花风车房（拱门内、正对玩家）
 
 export class StructureGenerator {
   constructor(world) {
@@ -56,16 +61,16 @@ export class StructureGenerator {
       }
     }
 
-    // ---------- 2. 新手之家（小木屋，位于 -z 方向） ----------
-    this._buildHouse(cx - 2, cz - 18, Y);
+    // ---------- 2. 新手之家（小木屋，移到东侧侧翼，把正前方让给樱花风车房主景观） ----------
+    this._buildHouse(cx + 12, cz - 16, Y);
 
-    // ---------- 3. 小牧场（围栏围合，动物由 game.js 生成），位于 +x ----------
-    const pen = { x: cx + 17, z: cz - 2 };
+    // ---------- 3. 小牧场（围栏围合，动物由 game.js 生成），位于 +x 更外侧 ----------
+    const pen = { x: cx + 20, z: cz - 2 };
     this._buildPen(pen.x, pen.z, Y, 9, 7);
 
     // ---------- 4. 池塘 + 小桥 + 凉亭（-x 方向） ----------
-    this._buildPond(cx - 18, cz + 6, Y, 7);
-    this._buildPavilion(cx - 18, cz - 10, Y);
+    this._buildPond(cx - 20, cz + 8, Y, 7);
+    this._buildPavilion(cx - 21, cz - 12, Y);
 
     // ---------- 5. 彩色花田（出生点周围，建筑区以外） ----------
     this._plantFlowers(cx, cz, Y);
@@ -73,19 +78,53 @@ export class StructureGenerator {
     // ---------- 6. 樱花树（家园边缘点缀） ----------
     this._plantCherryTrees(cx, cz, Y);
 
-    // ---------- 7. WELCOME 欢迎拱门（家园南侧入口，出生点背后） ----------
-    this._buildWelcomeArch(cx, cz + 24, Y);
+    // ---------- 7. WELCOME 欢迎拱门（出生点正前方广场入口） ----------
+    this._buildWelcomeArch(cx, SPAWN_ARCH_Z, Y);
 
     // ---------- 8. 通往外部的小路 + 边围栏 ----------
     this._buildPath(cx, cz, Y);
 
+    // ---------- 8.5 樱花风车房（核心主景观）：拱门内正前方，玩家一进世界穿过拱门即面对 ----------
+    this.windmillSpot = this._buildWindmill(cx, SPAWN_WINDMILL_Z, Y);
+    // 迎宾碎石大道：从出生点穿过拱门直通樱花风车房大门
+    this._buildWindmillPath(cx, 28, SPAWN_WINDMILL_Z + 3, Y);
+
     // ---------- 9. 出生点清场（确保站在空气里） ----------
     const sx = PLAYER_SPAWN.x, sz = PLAYER_SPAWN.z;
     w.clearSpawnArea(sx, sz);
-    // 向导兔子位置标记（由 game.js 生成动物）
-    this.guideSpot = { x: cx + 2.5, y: Y, z: cz + 12 };
+    // 向导兔子位置标记（由 game.js 生成动物），放在出生点旁边
+    this.guideSpot = { x: cx + 3.5, y: Y, z: PLAYER_SPAWN.z - 3 };
     this.penCenter = { x: pen.x, z: pen.z };
-    return { spawnX: sx, spawnZ: sz, penCenter: this.penCenter, guideSpot: this.guideSpot };
+    return { spawnX: sx, spawnZ: sz, penCenter: this.penCenter, guideSpot: this.guideSpot, windmillSpot: this.windmillSpot };
+  }
+
+  /**
+   * 幂等地标补建：无论新世界还是旧存档，进入时都确保出生家园核心区有
+   * 「樱花风车房 + 迎宾大道」这一主景观。已有（检测到塔身）则跳过，不会重复搭建。
+   * 这样旧世界的玩家也能看到新地标。返回 windmillSpot（叶片轴坐标）或 null。
+   */
+  ensureWindmillLandmark() {
+    const w = this.world;
+    const cx = HOME_CX, cz = HOME_CZ, Y = HOME_GROUND_Y;
+    // 风车核心位（与 decorateSpawn 一致：出生点正前方拱门内 z+13）
+    const wx = cx, wz = SPAWN_WINDMILL_Z;
+    // 检测：风车轴附近（塔身上部）是否已有樱木/木板墙体，有则视为已建
+    let towerHits = 0;
+    for (let dx = -2; dx <= 2; dx++) {
+      for (let dz = -2; dz <= 2; dz++) {
+        const b = w.getBlock(wx + dx, Y + 6, wz + dz);
+        if (b === BlockType.CHERRY_WOOD || b === BlockType.PLANKS) towerHits++;
+      }
+    }
+    if (towerHits >= 2) {
+      // 已存在，直接返回轴坐标供叶片使用
+      const R = 2, H = 11, axisY = Y + H - 3;
+      return { x: wx + 0.5, y: axisY + 0.5, z: wz + R + 1.2, facing: '+z' };
+    }
+    // 不存在 → 补建风车房 + 迎宾大道 + 周围樱花
+    const spot = this._buildWindmill(wx, wz, Y);
+    this._buildWindmillPath(cx, 28, wz + 3, Y);
+    return spot;
   }
 
   // 小木屋：木板墙 + 玻璃窗 + 木门 + 砖屋顶 + 红床 + 箱子 + 工作台 + 火把
@@ -245,28 +284,33 @@ export class StructureGenerator {
   _plantFlowers(cx, cz, Y) {
     const w = this.world;
     const flowers = [BlockType.FLOWER_RED, BlockType.FLOWER_YELLOW, BlockType.FLOWER_WHITE];
-    for (let i = 0; i < 140; i++) {
+    // 数量加密，让一进出生区就是缤纷花田（建筑区/中央搭建空地仍然避开）
+    for (let i = 0; i < 300; i++) {
       const ang = Math.random() * Math.PI * 2;
-      const rad = 4 + Math.random() * 24;
+      const rad = 5 + Math.random() * 25;
       const x = Math.round(cx + Math.cos(ang) * rad);
       const z = Math.round(cz + Math.sin(ang) * rad);
-      // 避开建筑区（家、牧场、池塘、凉亭、出生空地）
+      // 避开建筑区（家、牧场、池塘、凉亭、出生空地）与中央搭建区
       if (this._inBuilding(x, z)) continue;
+      // 中央平整草地留空给小朋友搭建（半径 ~10 的核心区不撒花）
+      if (Math.abs(x - HOME_CX) < 11 && Math.abs(z - HOME_CZ - 8) < 11) continue;
       if (w.getBlock(x, Y, z) !== BlockType.GRASS) continue;
       if (w.getBlock(x, Y + 1, z) !== BlockType.AIR) continue;
       const r = Math.random();
-      if (r < 0.5) w.setBlockGen(x, Y + 1, z, flowers[(Math.random() * 3) | 0]);
-      else if (r < 0.7) w.setBlockGen(x, Y + 1, z, BlockType.TALL_GRASS);
+      if (r < 0.62) w.setBlockGen(x, Y + 1, z, flowers[(Math.random() * 3) | 0]);
+      else if (r < 0.9) w.setBlockGen(x, Y + 1, z, BlockType.TALL_GRASS);
     }
   }
 
   _inBuilding(x, z) {
-    // 小屋
-    if (x >= -9 && x <= 2 && z >= -25 && z <= -11) return true;
-    // 牧场
-    if (x >= 8 && x <= 26 && z >= -10 && z <= 6) return true;
-    // 池塘+凉亭
-    if (x >= -32 && x <= -10 && z >= -17 && z <= 13) return true;
+    // 樱花风车房（核心主景观，正前方）
+    if (x >= -10 && x <= 10 && z >= -22 && z <= -6) return true;
+    // 新手之家（东侧侧翼）
+    if (x >= 6 && x <= 20 && z >= -24 && z <= -10) return true;
+    // 牧场（东侧外缘）
+    if (x >= 12 && x <= 30 && z >= -10 && z <= 6) return true;
+    // 池塘+凉亭（西侧）
+    if (x >= -34 && x <= -12 && z >= -18 && z <= 14) return true;
     // 出生空地
     if (Math.abs(x - HOME_CX) < 4 && Math.abs(z - HOME_CZ - 12) < 5) return true;
     return false;
@@ -274,7 +318,7 @@ export class StructureGenerator {
 
   _plantCherryTrees(cx, cz, Y) {
     const w = this.world;
-    const spots = [[-8, 18], [10, 20], [-24, -18], [24, -16], [4, -28], [-14, 26]];
+    const spots = [[-8, 20], [12, 22], [-26, -20], [26, -22], [-20, -26], [-12, 26]];
     for (const [dx, dz] of spots) {
       const x = cx + dx, z = cz + dz;
       if (w.getBlock(x, Y, z) !== BlockType.GRASS) continue;
@@ -287,14 +331,21 @@ export class StructureGenerator {
     const trunk = 4 + ((Math.random() * 2) | 0);
     for (let h = 1; h <= trunk; h++) w.setBlockGen(x, Y + h, z, BlockType.CHERRY_WOOD);
     const ty = Y + trunk;
-    for (let dx = -2; dx <= 2; dx++)
-      for (let dy = 0; dy <= 2; dy++)
-        for (let dz = -2; dz <= 2; dz++) {
-          const d = Math.abs(dx) + Math.abs(dz) + dy;
-          if (d > 3) continue;
-          const lx = x + dx, ly = ty + dy, lz = z + dz;
-          if (w.getBlock(lx, ly, lz) === BlockType.AIR) w.setBlockGen(lx, ly, lz, BlockType.CHERRY_LEAVES);
+    // 圆润蓬松的多层粉色花团树冠
+    const setLeaf = (lx, ly, lz) => {
+      if (w.getBlock(lx, ly, lz) === BlockType.AIR) w.setBlockGen(lx, ly, lz, BlockType.CHERRY_LEAVES);
+    };
+    const layers = [{ dy: -1, r: 3 }, { dy: 0, r: 3 }, { dy: 1, r: 2 }];
+    for (const L of layers) {
+      const R = L.r;
+      for (let dx = -R; dx <= R; dx++) {
+        for (let dz = -R; dz <= R; dz++) {
+          if (dx * dx + dz * dz > R * R) continue;
+          setLeaf(x + dx, ty + L.dy, z + dz);
         }
+      }
+    }
+    setLeaf(x, ty + 2, z);
   }
 
   // WELCOME 欢迎拱门（粉色羊毛立柱 + 横梁 + 灯笼）
@@ -309,29 +360,170 @@ export class StructureGenerator {
     for (let x = ax - 1; x <= ax + 1; x++) w.setBlockGen(x, Y + H + 1, az, BlockType.CHERRY_LEAVES);
   }
 
-  // 从出生点向北的小路（通往外面世界），两侧矮围栏
+  // 出生广场外圈矮围栏（南侧留拱门+出生点入口，北侧留探索出口）
   _buildPath(cx, cz, Y) {
     const w = this.world;
-    const pathZ = -12;      // 通往小屋方向
-    for (let z = pathZ; z >= cz - 8 && z >= -40; z--) {
-      // 暂不覆盖建筑
-    }
-    // 出生点到小屋之间铺一条沙砾小路
-    for (let z = cz - 8; z >= -12; z--) {
-      for (let dx of [-1, 0, 1]) {
-        const x = cx + dx;
-        if (w.getBlock(x, Y, z) === BlockType.GRASS) w.setBlockGen(x, Y, z, BlockType.GRAVEL);
-      }
-    }
-    // 出生空地外圈矮围栏（北侧留路、南侧留拱门）
+    // 出生广场外围一圈矮围栏（南侧拱门方向与正中央留出生点/通路开口）
     for (let a = 0; a < Math.PI * 2; a += 0.25) {
       const r = 22;
       const x = Math.round(cx + Math.cos(a) * r);
       const z = Math.round(cz + 12 + Math.sin(a) * r * 0.8);
       if (z > cz + 22) continue;            // 拱门方向留口
-      if (x > cx - 4 && x < cx + 4 && z < cz + 4) continue; // 小路方向留口
+      if (x > cx - 4 && x < cx + 4 && z < cz + 4) continue; // 北侧探索方向留口
+      // 风车所在区域不立围栏（风车 + 樱花林）
+      if (x > cx - 9 && x < cx + 9 && z > cz + 5 && z < cz + 18) continue;
       if (w.getBlock(x, Y, z) === BlockType.GRASS && w.getBlock(x, Y + 1, z) === BlockType.AIR) {
         w.setBlockGen(x, Y + 1, z, BlockType.FENCE);
+      }
+    }
+  }
+
+  /**
+   * 从家北门铺一条 3 宽碎石路，一路向北直通樱花风车房（沿途草地替换为 GRAVEL）。
+   */
+  _buildWindmillPath(cx, zFrom, zTo, Y) {
+    const w = this.world;
+    const zA = Math.min(zFrom, zTo), zB = Math.max(zFrom, zTo);
+    for (let z = zA; z <= zB; z++) {
+      for (let dx of [-1, 0, 1]) {
+        const x = cx + dx;
+        // 找到这一列的地表高度，路贴着地面铺（适应轻微起伏）
+        let gy = Y;
+        for (let y = Y + 6; y > Y - 6; y--) {
+          const b = w.getBlock(x, y, z);
+          if (b !== BlockType.AIR && b !== BlockType.TALL_GRASS && b !== BlockType.FLOWER_RED && b !== BlockType.FLOWER_YELLOW && b !== BlockType.FLOWER_WHITE && b !== BlockType.WATER) { gy = y; break; }
+        }
+        const top = w.getBlock(x, gy, z);
+        if (top === BlockType.GRASS || top === BlockType.DIRT) {
+          w.setBlockGen(x, gy, z, BlockType.GRAVEL);
+        }
+      }
+    }
+  }
+
+  /**
+   * 粉色风车磨坊地标（出生区北侧）。
+   * 用樱木 + 粉色羊毛感方块（PLANKS/BRICK/CHERRY_WOOD）搭一座高塔楼 + 陡坡屋顶，
+   * 正面留一个窗洞作为"风车轴"位置；转动的叶片由 game.js 的 WindmillBlades 动态渲染。
+   * 返回叶片轴的世界坐标 {x,y,z}（轴在塔楼正面、朝 +z 面向出生点）。
+   */
+  _buildWindmill(ox, oz, Y) {
+    const w = this.world;
+    // 塔身为 5x5 截面、高 11 层的圆柱形（去角）
+    const R = 2;            // 半径（5x5）
+    const H = 11;           // 塔身高度
+    const baseY = Y;
+    const set = (x, y, z, b) => w.setBlockGen(ox + x, y, oz + z, b);
+
+    // 清出建塔空地
+    for (let dx = -3; dx <= 3; dx++) {
+      for (let dz = -3; dz <= 3; dz++) {
+        for (let y = baseY + 1; y <= baseY + H + 8; y++) w.setBlockGen(ox + dx, y, oz + dz, BlockType.AIR);
+        const surf = w.getSurfaceHeight(ox + dx, oz + dz);
+        for (let y = Math.min(surf, baseY) + 1; y <= baseY; y++) {
+          if (y <= baseY) w.setBlockGen(ox + dx, y, oz + dz, y === baseY ? BlockType.GRASS : BlockType.DIRT);
+        }
+      }
+    }
+
+    // 塔身：圆石地基 + 樱木墙，去角呈圆柱
+    for (let h = 0; h < H; h++) {
+      for (let dx = -R; dx <= R; dx++) {
+        for (let dz = -R; dz <= R; dz++) {
+          const corner = Math.abs(dx) === R && Math.abs(dz) === R;
+          if (corner) continue;                       // 去角，圆润
+          const isFloor = (dx === 0 && dz === 0);
+          // 地基两层圆石
+          let wall = h < 2 ? BlockType.COBBLESTONE : BlockType.CHERRY_WOOD;
+          // 粉色横带装饰（每隔几层夹一圈 PLANKS 暖色）
+          if (h === 4 || h === 8) wall = BlockType.PLANKS;
+          set(dx, baseY + h, dz, wall);
+        }
+      }
+      // 内部掏空（留墙厚 1 格），形成可进入的磨坊小屋
+      for (let dx = -R + 1; dx <= R - 1; dx++) {
+        for (let dz = -R + 1; dz <= R - 1; dz++) {
+          if (Math.abs(dx) === R - 1 && Math.abs(dz) === R - 1) continue;
+          if (h > 0) set(dx, baseY + h, dz, BlockType.AIR);
+        }
+      }
+    }
+
+    // 塔内地板 + 小梯子感（用 PLANKS 铺一层）
+    for (let dx = -R + 1; dx <= R - 1; dx++)
+      for (let dz = -R + 1; dz <= R - 1; dz++)
+        if (!(Math.abs(dx) === R - 1 && Math.abs(dz) === R - 1)) set(dx, baseY + 1, dz, BlockType.PLANKS);
+
+    // 陡坡屋顶（金字塔形，粉红/白色）：从塔尖往上收
+    const roofBase = baseY + H;
+    for (let layer = 0; layer <= R + 1; layer++) {
+      const rr = R + 1 - layer;
+      for (let dx = -rr; dx <= rr; dx++) {
+        for (let dz = -rr; dz <= rr; dz++) {
+          if (Math.abs(dx) === rr && Math.abs(dz) === rr) continue;
+          // 交替粉/白，做出糖果条纹屋顶
+          const stripe = (layer % 2 === 0) ? BlockType.BRICK : BlockType.PLANKS;
+          set(dx, roofBase + layer, dz, stripe);
+        }
+      }
+    }
+
+    // 正面（+z，朝向出生点）开门 + 窗
+    const doorZ = R;
+    for (let y = 1; y <= 2; y++) set(0, baseY + y, doorZ, BlockType.AIR);
+    set(0, baseY + 3, doorZ, BlockType.GLASS);
+    // 风车轴窗洞：在塔身上部正面开一个圆孔，叶片轴心在这
+    const axisY = baseY + H - 3;
+    set(0, axisY, doorZ, BlockType.AIR);
+
+    // 门两侧 + 窗旁挂灯笼
+    set(-1, baseY + 2, doorZ, BlockType.LANTERN);
+    set(1, baseY + 2, doorZ, BlockType.LANTERN);
+
+    // 风车周围种一圈樱花树，形成"樱花林风车房"（正面朝南 +z 留通道，不挡视线和道路）
+    const ring = [
+      [-6, -5], [0, -7], [6, -5], [-7, 0], [7, 0],
+      [-6, 4], [6, 4], [-4, -1], [4, -1],
+    ];
+    for (const [rx, rz] of ring) {
+      this._placeCherrySapling(ox + rx, oz + rz, baseY);
+    }
+    // 正面（朝拱门/出生点 +z）樱花夹道：迎宾大道两侧成对种樱花树（x=±4 外，树冠不压中间 3 宽碎石路）
+    const avenue = [
+      [-4, 5], [4, 5], [-4, 7], [4, 7], [-5, 9], [5, 9],
+    ];
+    for (const [rx, rz] of avenue) {
+      this._placeCherrySapling(ox + rx, oz + rz, baseY);
+    }
+    // 风车脚边撒一圈粉色花
+    for (let a = 0; a < Math.PI * 2; a += 0.5) {
+      const fx = ox + Math.round(Math.cos(a) * 4);
+      const fz = oz + R + 1 + Math.round(Math.sin(a) * 4);
+      if (w.getBlock(fx, baseY, fz) === BlockType.GRASS && w.getBlock(fx, baseY + 1, fz) === BlockType.AIR) {
+        w.setBlockGen(fx, baseY + 1, fz, (Math.random() < 0.5) ? BlockType.FLOWER_RED : BlockType.FLOWER_WHITE);
+      }
+    }
+
+    // 返回叶片轴坐标（轴在塔身正面外一格、朝 +z）
+    return { x: ox + 0.5, y: axisY + 0.5, z: oz + R + 1.2, facing: '+z' };
+  }
+
+  /** 在指定位置放一棵小樱花树（复用樱花树生成的简化版） */
+  _placeCherrySapling(x, z, Y) {
+    const w = this.world;
+    const trunk = 3 + ((Math.random() * 2) | 0);
+    for (let h = 1; h <= trunk; h++) w.setBlockGen(x, Y + h, z, BlockType.CHERRY_WOOD);
+    const cy = Y + trunk;
+    for (let dx = -2; dx <= 2; dx++) {
+      for (let dy = 0; dy <= 2; dy++) {
+        for (let dz = -2; dz <= 2; dz++) {
+          const d = Math.abs(dx) + Math.abs(dz) + dy;
+          if (d > 4) continue;
+          if (dx === 0 && dz === 0 && dy === 0) continue;
+          if (Math.random() < 0.25 && dy < 2) continue;
+          const lx = x + dx, ly = cy + dy, lz = z + dz;
+          if (w.getBlock(lx, ly, lz) === BlockType.AIR) w.setBlockGen(lx, ly, lz, BlockType.CHERRY_LEAVES);
+        }
       }
     }
   }

@@ -1,6 +1,6 @@
 import * as THREE from 'three';
-import { BlockType, BlockNames, BLOCK_TEXTURES, createBlockTexture, ATLAS_COLS, TEX_SIZE } from './voxel.js?v=20260924d';
-import { ItemNames, getItemIcon } from './equipment.js?v=20260924d';
+import { BlockType, BlockNames, BLOCK_TEXTURES, createBlockTexture, ATLAS_COLS, TEX_SIZE } from './voxel.js?v=20260925l';
+import { ItemNames, getItemIcon } from './equipment.js?v=20260925l';
 
 /**
  * 创造模式背包：
@@ -15,11 +15,12 @@ export class Inventory {
     this.isOpen = false;
     this.selectedSourceType = null; // 从背包网格中点击选中的方块
     this.onHotbarChange = null; // 回调：(hotbar: number[]) => void
-    // 9 格热键栏，0=空气，其余为 BlockType
+    // 9 格热键栏，0=空气；第 9 格（索引 8）空槽 = 磁铁收集模式
+    // 只放最基础常用方块；木门/围栏/梯子等在兑换商店与创造背包（E）里取用
     this._defaultHotbar = [
       BlockType.GRASS, BlockType.DIRT, BlockType.STONE,
-      BlockType.WOOD, BlockType.LEAVES, BlockType.SAND,
-      BlockType.PLANKS, BlockType.GLASS, BlockType.AIR,
+      BlockType.WOOD, BlockType.PLANKS, BlockType.GLASS,
+      BlockType.BRICK, BlockType.SAND, BlockType.AIR,
     ];
     this.hotbar = this._defaultHotbar.slice();
 
@@ -204,6 +205,13 @@ export class Inventory {
   getSelectedBlock(slotIndex) {
     const t = this.hotbar[slotIndex];
     return t && t !== BlockType.AIR ? t : BlockType.STONE;
+  }
+
+  /** 取某个快捷栏槽位的类型（空槽返回 AIR） */
+  getSlot(slotIndex) {
+    if (slotIndex == null || slotIndex < 0 || slotIndex >= this.hotbar.length) return BlockType.AIR;
+    const t = this.hotbar[slotIndex];
+    return typeof t === 'number' ? t : BlockType.AIR;
   }
 
   /** 外部（兑换商店）设置某个槽位 */

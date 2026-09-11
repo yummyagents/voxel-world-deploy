@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { SimplexNoise } from './noise.js?v=20260924d';
+import { SimplexNoise } from './noise.js?v=20260925l';
 
 /* ============================================
    常量
@@ -1285,7 +1285,7 @@ export class Chunk {
     const wx0 = this.cx * CHUNK_SIZE;
     const wz0 = this.cz * CHUNK_SIZE;
 
-    const sPos = [], sNorm = [], sUv = [], sIdx = []; let sVc = 0;
+    const sPos = [], sNorm = [], sUv = [], sIdx = [], sCol = []; let sVc = 0;
     const wPos = [], wNorm = [], wUv = [], wIdx = []; let wVc = 0;
     const cPos = [], cNorm = [], cUv = [], cIdx = []; let cVc = 0;
 
@@ -1293,6 +1293,38 @@ export class Chunk {
       if (lx >= 0 && lx < CHUNK_SIZE && lz >= 0 && lz < CHUNK_SIZE && ly >= 0 && ly < CHUNK_HEIGHT)
         return this.getBlock(lx, ly, lz);
       return getWorldBlock(wx0 + lx, ly, wz0 + lz);
+    };
+    // AO 遮挡判定：不透明实心方块才会在角落投下柔和阴影（树叶/玻璃/水/植物不算遮挡物）
+    const occludes = (lx, ly, lz) => {
+      const b = getNeighbor(lx, ly, lz);
+      return b !== BlockType.AIR && !isTransparent(b) && !isLiquid(b);
+    };
+    const AXES = [0, 1, 2];
+    // 经典 voxel 环境光遮蔽：逐顶点采样面外"边1/边2/角"三个邻块，按遮挡数给 4 级柔和亮度
+    const vertexAO = (lx, ly, lz, face) => {
+      const n = face.dir;
+      const faceAxis = AXES.find(a => n[a] !== 0);
+      const tangents = AXES.filter(a => n[a] === 0);   // 切平面两个轴
+      const [tA, tB] = tangents;
+      const base = [lx, ly, lz];
+      base[faceAxis] += n[faceAxis];                   // 移到面外一格
+      const aoVals = [1, 1, 1, 1];
+      for (let i = 0; i < 4; i++) {
+        const cp = face.corners[i].pos;
+        const oa = cp[tA] > 0.5 ? 1 : -1;             // 顶点在该切轴高端→正偏，低端→负偏
+        const ob = cp[tB] > 0.5 ? 1 : -1;
+        const s1 = base.slice(); s1[tA] += oa;
+        const s2 = base.slice(); s2[tB] += ob;
+        const cc = base.slice(); cc[tA] += oa; cc[tB] += ob;
+        const v1 = occludes(s1[0], s1[1], s1[2]) ? 1 : 0;
+        const v2 = occludes(s2[0], s2[1], s2[2]) ? 1 : 0;
+        const v3 = occludes(cc[0], cc[1], cc[2]) ? 1 : 0;
+        let level;
+        if (v1 && v2) level = 3;                       // 两条边都挡住时，角被夹在最暗缝里
+        else level = v1 + v2 + v3;
+        aoVals[i] = level === 0 ? 1.0 : level === 1 ? 0.82 : level === 2 ? 0.68 : 0.55;
+      }
+      return aoVals;
     };
 
     for (let ly = 0; ly < CHUNK_HEIGHT; ly++) {
@@ -1353,10 +1385,19 @@ export class Chunk {
             const texIdx = texMap[face.face];
             const { u0, v0, u1, v1 } = getTexUV(texIdx);
 
-            for (const corner of face.corners) {
+            // 环境光遮蔽：solid 面逐顶点算柔和角落阴影（水/植物不做）
+            let ao = null;
+            if (!isWater) ao = vertexAO(lx, ly, lz, face);
+
+            for (let ci = 0; ci < 4; ci++) {
+              const corner = face.corners[ci];
               positions.push(lx + corner.pos[0], ly + corner.pos[1], lz + corner.pos[2]);
               normals.push(face.dir[0], face.dir[1], face.dir[2]);
               uvs.push(u0 + corner.uv[0] * (u1 - u0), v0 + corner.uv[1] * (v1 - v0));
+              if (!isWater) {
+                const a = ao[ci];
+                sCol.push(a, a, a);
+              }
             }
             indices.push(vertexCount, vertexCount + 1, vertexCount + 2, vertexCount, vertexCount + 2, vertexCount + 3);
             vertexCount += 4;
@@ -1373,6 +1414,7 @@ export class Chunk {
       geo.setAttribute('position', new THREE.Float32BufferAttribute(sPos, 3));
       geo.setAttribute('normal', new THREE.Float32BufferAttribute(sNorm, 3));
       geo.setAttribute('uv', new THREE.Float32BufferAttribute(sUv, 2));
+      geo.setAttribute('color', new THREE.Float32BufferAttribute(sCol, 3));
       geo.setIndex(sIdx);
       geo.computeBoundingSphere();
       this.mesh = new THREE.Mesh(geo, material);
@@ -1448,6 +1490,25 @@ export const BiomeNames = {
   [Biome.TAIGA]: '针叶林',
   [Biome.SWAMP]: '沼泽',
   [Biome.MESA]: '恶地',
+};
+
+/**
+ * 群系雾色（空气透视）：不同群系的远景/雾色略微染色，
+ * 让远山发蓝、雪原泛白、沙漠暖黄、樱花泛粉——更有层次和氛围。
+ * 值为白天明亮时刻的雾色（RGB hex）。
+ */
+export const BiomeFog = {
+  [Biome.OCEAN]: 0xaed6f0,    // 海洋：清透蓝
+  [Biome.PLAINS]: 0xbfe0f2,   // 平原：浅天蓝
+  [Biome.DESERT]: 0xefe0b8,   // 沙漠：暖沙黄
+  [Biome.JUNGLE]: 0xa9d3b4,   // 丛林：青翠薄雾
+  [Biome.SNOW]: 0xeaf3fb,     // 雪原：冷白
+  [Biome.SAVANNA]: 0xe7dcae,  // 热带草原：干草黄
+  [Biome.MOUNTAINS]: 0xb8ccdf,// 山地：远山蓝灰
+  [Biome.CHERRY]: 0xf6d6e6,   // 樱花林：柔粉
+  [Biome.TAIGA]: 0xb9cdc0,    // 针叶林：冷绿灰
+  [Biome.SWAMP]: 0xbfcbb0,    // 沼泽：闷绿
+  [Biome.MESA]: 0xeccdb0,     // 恶地：暖橙
 };
 
 /* ============================================
@@ -1530,9 +1591,14 @@ export class World {
 
   init() {
     const texture = createBlockTexture();
-    this.material = new THREE.MeshLambertMaterial({ map: texture, side: THREE.FrontSide });
-    this.waterMaterial = new THREE.MeshLambertMaterial({
-      map: texture, side: THREE.DoubleSide, transparent: true, opacity: 0.72, depthWrite: false,
+    // 主材质启用顶点色：buildMesh 写入的 AO 柔和角落阴影由此生效
+    this.material = new THREE.MeshLambertMaterial({
+      map: texture, side: THREE.FrontSide, vertexColors: true,
+    });
+    // 水体：半透明清透蓝 + 轻微高光，能看到下方，仍可进入游泳
+    this.waterMaterial = new THREE.MeshPhongMaterial({
+      map: texture, side: THREE.DoubleSide, transparent: true, opacity: 0.62,
+      depthWrite: false, color: 0x8fd3ff, specular: 0xbfe6ff, shininess: 60,
     });
     this.crossMaterial = new THREE.MeshLambertMaterial({
       map: texture, side: THREE.DoubleSide, transparent: true, alphaTest: 0.4, depthWrite: false,
@@ -1621,6 +1687,12 @@ export class World {
     const mtn = this.noise.fbm(wx * 0.015, wz * 0.015, 3, 2.0, 0.5);
     if (mtn > 0.55) return Biome.MOUNTAINS;
     return Biome.PLAINS;
+  }
+
+  /** 取某坐标所在群系的雾色（空气透视染色），未定义则回退平原蓝 */
+  getBiomeFogColor(wx, wz) {
+    const b = this.getBiome(wx, wz);
+    return BiomeFog[b] != null ? BiomeFog[b] : BiomeFog[Biome.PLAINS];
   }
 
   /** 获取群系基础地表高度 */
@@ -1898,15 +1970,17 @@ export class World {
             if (surfaceBlock === BlockType.STONE && surfaceY > SEA_LEVEL + 22 && r > 0.985) chunk.setBlock(lx, surfaceY + 1, lz, BlockType.SNOW);
             break;
           case Biome.CHERRY:
-            // 樱花林：粉色树叶
+            // 樱花林：粉色树叶 + 丰满树冠；地面撒满花与草，营造花海
             if (treeR > 0.72) this._placeTree(chunk, lx, surfaceY, lz, BlockType.CHERRY_WOOD, BlockType.CHERRY_LEAVES, 4 + (hash(wx, wz) * 2 | 0));
-            else if (r > 0.82) this._placeFlower(chunk, lx, surfaceY + 1, lz, r, true);
-            else if (r > 0.72) this._placeCross(chunk, lx, surfaceY + 1, lz, BlockType.TALL_GRASS);
+            else if (r > 0.62) this._placeFlower(chunk, lx, surfaceY + 1, lz, r, true);
+            else if (r > 0.5) this._placeCross(chunk, lx, surfaceY + 1, lz, BlockType.TALL_GRASS);
             break;
           case Biome.TAIGA:
             // 针叶林：云杉树
             if (treeR > 0.74) this._placeTree(chunk, lx, surfaceY, lz, BlockType.SPRUCE_WOOD, BlockType.SPRUCE_LEAVES, 6 + (hash(wx, wz) * 3 | 0));
-            else if (r > 0.88) this._placeCross(chunk, lx, surfaceY + 1, lz, BlockType.MUSHROOM_BROWN);
+            else if (r > 0.9) this._placeCross(chunk, lx, surfaceY + 1, lz, BlockType.MUSHROOM_RED);
+            else if (r > 0.82) this._placeCross(chunk, lx, surfaceY + 1, lz, BlockType.MUSHROOM_BROWN);
+            else if (r > 0.6) this._placeCross(chunk, lx, surfaceY + 1, lz, BlockType.TALL_GRASS); // 蕨类/地被
             break;
           case Biome.SWAMP:
             // 沼泽：深色橡树、蘑菇、浅水（已由水生成处理）
@@ -1958,6 +2032,35 @@ export class World {
     const h = trunkH || (4 + ((hash(lx, lz) * 3) | 0));
     for (let ty = 1; ty <= h; ty++) chunk.setBlock(lx, surfaceY + ty, lz, woodType);
     const canopyY = surfaceY + h;
+
+    // 樱花树：更圆润蓬松的多层球冠，顶部加一层粉色花团，营造花海感
+    if (leafType === BlockType.CHERRY_LEAVES) {
+      const setLeaf = (bx, by, bz) => {
+        if (bx < 0 || bx >= CHUNK_SIZE || bz < 0 || bz >= CHUNK_SIZE) return;
+        if (chunk.getBlock(bx, by, bz) === BlockType.AIR) chunk.setBlock(bx, by, bz, leafType);
+      };
+      // 3 层由宽到窄的球冠（半径 3 / 3 / 2），圆形去角更蓬松
+      const layers = [
+        { dy: -1, r: 3 }, { dy: 0, r: 3 }, { dy: 1, r: 2 },
+      ];
+      for (const L of layers) {
+        const R = L.r;
+        for (let dx = -R; dx <= R; dx++) {
+          for (let dz = -R; dz <= R; dz++) {
+            const d2 = dx * dx + dz * dz;
+            if (d2 > R * R) continue;                 // 圆形
+            if (d2 > (R - 1) * (R - 1) && hash(lx * 13 + dx, lz * 17 + dz) > 0.45) continue; // 边缘镂空，自然
+            setLeaf(lx + dx, canopyY + L.dy, lz + dz);
+          }
+        }
+      }
+      // 顶部花团尖（2 格），让树冠有饱满的最高点
+      setLeaf(lx, canopyY + 2, lz);
+      setLeaf(lx + 1, canopyY + 1, lz); setLeaf(lx - 1, canopyY + 1, lz);
+      setLeaf(lx, canopyY + 1, lz + 1); setLeaf(lx, canopyY + 1, lz - 1);
+      return;
+    }
+
     const radius = leafType === BlockType.JUNGLE_LEAVES ? 3 : 2;
     for (let dy = 0; dy < 2; dy++)
       for (let dx = -radius; dx <= radius; dx++)
