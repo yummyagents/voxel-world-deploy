@@ -1,10 +1,10 @@
-// js/furniture.js v20260925ai
+// js/furniture.js v20260925aj
 // 家具/装饰 3D 微模型：床 / 桌子 / 椅子 / 沙发 / 箱子 / 半砖 / 栅栏 / 活板门 / 灯笼 / 蜡烛
 // 这些方块不再渲染成"满格贴图立方体"，而是用小盒体拼出真实造型。
 // 家具按朝向(dir 0..3)绕 Y 轴旋转，使靠背/床头/箱锁正面朝向放置玩家。
 // 每个区块生成时调用 buildFurnitureGroup 扫描，产出挂到区块 group 的 InstancedMesh。
 
-import { BlockType, CHUNK_SIZE, CHUNK_HEIGHT, World } from './voxel.js?v=20260925ai';
+import { BlockType, CHUNK_SIZE, CHUNK_HEIGHT, World } from './voxel.js?v=20260925aj';
 
 // ── 柔和配色（与手持方块 getBlockColor 协调） ──
 const COLORS = {

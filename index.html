@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
   <meta name="description" content="像素方块世界 - 3D像素风格方块世界探索游戏" />
   <title>美味特工队 · 像素方块训练基地</title>
-  <link rel="stylesheet" href="./styles/main.css?v=20260925ai" />
+  <link rel="stylesheet" href="./styles/main.css?v=20260925aj" />
   <!-- 使用 importmap 引入 Three.js ES Module -->
   <script type="importmap">
   {
@@ -304,18 +304,18 @@
 
   <!-- 游戏主模块 -->
   <!-- Supabase 浏览器库（本地自包含，用于访客计数/点赞/留言） -->
-  <script src="./js/lib/supabase.umd.js"></script>
+  <script src="./js/lib/supabase.umd.js?v=20260925aj"></script>
 
   <!-- 社区功能引导（开始界面的计数/点赞/留言） -->
   <script type="module">
-    import { Community } from './js/community.js?v=20260925ai';
+    import { Community } from './js/community.js?v=20260925aj';
     try {
       const mount = document.getElementById('communityMount');
       if (mount) { const c = new Community(); c.mount(mount); }
     } catch (e) { console.warn('[community] 加载失败', e); }
   </script>
 
-  <script type="module" src="./js/game.js?v=20260925ai"></script>
+  <script type="module" src="./js/game.js?v=20260925aj"></script>
 
   <!-- 兜底：模块若加载失败或卡住，给出可见提示而不是无限"生成世界中..." -->
   <script>

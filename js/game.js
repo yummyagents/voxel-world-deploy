@@ -8,32 +8,32 @@ import {
   World, Chunk, BlockType, BlockNames, isSolid,
   CHUNK_SIZE, CHUNK_HEIGHT, RENDER_DISTANCE, getBlockColor,
   isMobileDevice, getRenderDistance, getBlockDrop, BiomeNames, Biome,
-} from './voxel.js?v=20260925ai';
-import { Multiplayer } from './multiplayer.js?v=20260925ai';
-import { isCommunityEnabled } from './config.js?v=20260925ai';
-import { AnimalManager, Sheep, Rabbit, Horse, Cow, Pig, Chicken, Villager, IronGolem } from './animals.js?v=20260925ai';
-import { WeatherSystem, WeatherType, WeatherNames } from './weather.js?v=20260925ai';
-import { DayNightCycle } from './daynight.js?v=20260925ai';
-import { DropManager } from './drops.js?v=20260925ai';
-import { VillageGenerator } from './village.js?v=20260925ai';
-import { Inventory } from './inventory.js?v=20260925ai';
-import { ExchangeShop } from './exchange.js?v=20260925ai';
-import { createHeldModel, createArmModel, ItemNames, getItemIcon, AGENT_ARMS } from './equipment.js?v=20260925ai';
-import { StructureGenerator, PLAYER_SPAWN, SAKURA_ISLAND_X, SAKURA_ISLAND_Z } from './structures.js?v=20260925ai';
-import { PlayerCharacter } from './player-character.js?v=20260925ai';
-import { SakuraPetals } from './sakura.js?v=20260925ai';
-import { BirdManager, ButterflyManager } from './birds.js?v=20260925ai';
-import { WindmillBlades } from './windmill.js?v=20260925ai';
-import { WorldMap } from './world-map.js?v=20260925ai';
-import { Fireflies } from './fireflies.js?v=20260925ai';
-import { SoundFX } from './audio.js?v=20260925ai';
-import { Tutorial } from './tutorial.js?v=20260925ai';
+} from './voxel.js?v=20260925aj';
+import { Multiplayer } from './multiplayer.js?v=20260925aj';
+import { isCommunityEnabled } from './config.js?v=20260925aj';
+import { AnimalManager, Sheep, Rabbit, Horse, Cow, Pig, Chicken, Villager, IronGolem } from './animals.js?v=20260925aj';
+import { WeatherSystem, WeatherType, WeatherNames } from './weather.js?v=20260925aj';
+import { DayNightCycle } from './daynight.js?v=20260925aj';
+import { DropManager } from './drops.js?v=20260925aj';
+import { VillageGenerator } from './village.js?v=20260925aj';
+import { Inventory } from './inventory.js?v=20260925aj';
+import { ExchangeShop } from './exchange.js?v=20260925aj';
+import { createHeldModel, createArmModel, ItemNames, getItemIcon, AGENT_ARMS } from './equipment.js?v=20260925aj';
+import { StructureGenerator, PLAYER_SPAWN, SAKURA_ISLAND_X, SAKURA_ISLAND_Z } from './structures.js?v=20260925aj';
+import { PlayerCharacter } from './player-character.js?v=20260925aj';
+import { SakuraPetals } from './sakura.js?v=20260925aj';
+import { BirdManager, ButterflyManager } from './birds.js?v=20260925aj';
+import { WindmillBlades } from './windmill.js?v=20260925aj';
+import { WorldMap } from './world-map.js?v=20260925aj';
+import { Fireflies } from './fireflies.js?v=20260925aj';
+import { SoundFX } from './audio.js?v=20260925aj';
+import { Tutorial } from './tutorial.js?v=20260925aj';
 import {
   loadSave, writeSave, clearSave, hasSave,
   exportSave, importSave,
-} from './save.js?v=20260925ai';
-import { Portfolio } from './portfolio.js?v=20260925ai';
-import { buildFurnitureGroup } from './furniture.js?v=20260925ai';
+} from './save.js?v=20260925aj';
+import { Portfolio } from './portfolio.js?v=20260925aj';
+import { buildFurnitureGroup } from './furniture.js?v=20260925aj';
 
 // 多人联机：队友超过该水平距离（格）时，屏幕边缘出现方向指引
 const TEAM_POINTER_SHOW_DIST = 40;

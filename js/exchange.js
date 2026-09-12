@@ -1,5 +1,5 @@
-import { BlockType, BlockNames, BLOCK_TEXTURES, createBlockTexture, ATLAS_COLS, TEX_SIZE } from './voxel.js?v=20260925ai';
-import { ItemType, ItemNames, getItemIcon } from './equipment.js?v=20260925ai';
+import { BlockType, BlockNames, BLOCK_TEXTURES, createBlockTexture, ATLAS_COLS, TEX_SIZE } from './voxel.js?v=20260925aj';
+import { ItemType, ItemNames, getItemIcon } from './equipment.js?v=20260925aj';
 
 /**
  * 装备兑换 / 商店：

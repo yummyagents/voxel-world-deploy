@@ -1,7 +1,7 @@
 // multiplayer.js —— 多人联机同步（浏览器直连 Supabase）
 // 负责：创建/加入房间、拉取共建方块、Realtime 实时同步放拆与玩家现身。
 // 未配置 Supabase 或库未加载时自动禁用，不影响单机游戏。
-import { SUPABASE_URL, SUPABASE_ANON_KEY, isCommunityEnabled } from './config.js?v=20260925ai';
+import { SUPABASE_URL, SUPABASE_ANON_KEY, isCommunityEnabled } from './config.js?v=20260925aj';
 
 const PID_KEY = 'voxel_mp_pid_v1';
 const NAME_KEY = 'voxel_mp_name_v1';

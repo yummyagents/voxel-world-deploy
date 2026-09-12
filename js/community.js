@@ -1,6 +1,6 @@
 // community.js —— 社区功能：访客计数 / 点赞 / 留言（直连 Supabase，浏览器端）
 // 使用 publishable(anon) key + 数据库 RLS/RPC 安全策略。功能失败时静默降级，不影响游戏。
-import { SUPABASE_URL, SUPABASE_ANON_KEY, isCommunityEnabled } from './config.js?v=20260925ai';
+import { SUPABASE_URL, SUPABASE_ANON_KEY, isCommunityEnabled } from './config.js?v=20260925aj';
 
 const CHAR_KEY = 'voxel_character_v1';
 
