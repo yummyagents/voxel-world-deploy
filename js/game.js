@@ -8,32 +8,32 @@ import {
   World, Chunk, BlockType, BlockNames, isSolid,
   CHUNK_SIZE, CHUNK_HEIGHT, RENDER_DISTANCE, getBlockColor,
   isMobileDevice, getRenderDistance, getBlockDrop, BiomeNames, Biome,
-} from './voxel.js?v=20260925an';
-import { Multiplayer } from './multiplayer.js?v=20260925an';
-import { isCommunityEnabled } from './config.js?v=20260925an';
-import { AnimalManager, Sheep, Rabbit, Horse, Cow, Pig, Chicken, Villager, IronGolem } from './animals.js?v=20260925an';
-import { WeatherSystem, WeatherType, WeatherNames } from './weather.js?v=20260925an';
-import { DayNightCycle } from './daynight.js?v=20260925an';
-import { DropManager } from './drops.js?v=20260925an';
-import { VillageGenerator } from './village.js?v=20260925an';
-import { Inventory } from './inventory.js?v=20260925an';
-import { ExchangeShop } from './exchange.js?v=20260925an';
-import { createHeldModel, createArmModel, ItemNames, getItemIcon, AGENT_ARMS } from './equipment.js?v=20260925an';
-import { StructureGenerator, PLAYER_SPAWN, SAKURA_ISLAND_X, SAKURA_ISLAND_Z } from './structures.js?v=20260925an';
-import { PlayerCharacter } from './player-character.js?v=20260925an';
-import { SakuraPetals } from './sakura.js?v=20260925an';
-import { BirdManager, ButterflyManager } from './birds.js?v=20260925an';
-import { WindmillBlades } from './windmill.js?v=20260925an';
-import { WorldMap } from './world-map.js?v=20260925an';
-import { Fireflies } from './fireflies.js?v=20260925an';
-import { SoundFX } from './audio.js?v=20260925an';
-import { Tutorial } from './tutorial.js?v=20260925an';
+} from './voxel.js?v=20260925ai';
+import { Multiplayer } from './multiplayer.js?v=20260925ai';
+import { isCommunityEnabled } from './config.js?v=20260925ai';
+import { AnimalManager, Sheep, Rabbit, Horse, Cow, Pig, Chicken, Villager, IronGolem } from './animals.js?v=20260925ai';
+import { WeatherSystem, WeatherType, WeatherNames } from './weather.js?v=20260925ai';
+import { DayNightCycle } from './daynight.js?v=20260925ai';
+import { DropManager } from './drops.js?v=20260925ai';
+import { VillageGenerator } from './village.js?v=20260925ai';
+import { Inventory } from './inventory.js?v=20260925ai';
+import { ExchangeShop } from './exchange.js?v=20260925ai';
+import { createHeldModel, createArmModel, ItemNames, getItemIcon, AGENT_ARMS } from './equipment.js?v=20260925ai';
+import { StructureGenerator, PLAYER_SPAWN, SAKURA_ISLAND_X, SAKURA_ISLAND_Z } from './structures.js?v=20260925ai';
+import { PlayerCharacter } from './player-character.js?v=20260925ai';
+import { SakuraPetals } from './sakura.js?v=20260925ai';
+import { BirdManager, ButterflyManager } from './birds.js?v=20260925ai';
+import { WindmillBlades } from './windmill.js?v=20260925ai';
+import { WorldMap } from './world-map.js?v=20260925ai';
+import { Fireflies } from './fireflies.js?v=20260925ai';
+import { SoundFX } from './audio.js?v=20260925ai';
+import { Tutorial } from './tutorial.js?v=20260925ai';
 import {
   loadSave, writeSave, clearSave, hasSave,
   exportSave, importSave,
-} from './save.js?v=20260925an';
-import { Portfolio } from './portfolio.js?v=20260925an';
-import { buildFurnitureGroup } from './furniture.js?v=20260925an';
+} from './save.js?v=20260925ai';
+import { Portfolio } from './portfolio.js?v=20260925ai';
+import { buildFurnitureGroup } from './furniture.js?v=20260925ai';
 
 // 多人联机：队友超过该水平距离（格）时，屏幕边缘出现方向指引
 const TEAM_POINTER_SHOW_DIST = 40;
@@ -69,8 +69,6 @@ class Player {
     this.moveSpeed = 5.5;
     this.onGround = false;
     this.flying = false; // 创造飞行（双击空格）
-    this.pose = 'stand'; // stand | sit | lie
-    this.seat = null;    // {x,y,z,top} 当前坐/卧的家具方块
 
     // 玩家碰撞体尺寸
     this.width = 0.6;
@@ -104,36 +102,6 @@ class Player {
   update(dt) {
     // 限制最大帧间隔，防止穿墙
     dt = Math.min(dt, 0.05);
-
-    // 坐/卧状态：锁定在家具上；家具被其他玩家拆掉或按移动键时起身
-    if (this.pose !== 'stand') {
-      const seatType = this.seat ? this.world.getBlock(this.seat.x, this.seat.y, this.seat.z) : BlockType.AIR;
-      const seatGone = this.seat && (seatType === BlockType.AIR
-        || (this.pose === 'sit' && seatType !== BlockType.CHAIR_WOOD && seatType !== BlockType.SOFA_RED)
-        || (this.pose === 'lie' && seatType !== BlockType.BED_RED && seatType !== BlockType.BED_BLUE
-          && seatType !== BlockType.BED_GREEN && seatType !== BlockType.BED_YELLOW));
-      const wantsMove = this.keys['KeyW'] || this.keys['KeyA'] || this.keys['KeyS'] || this.keys['KeyD']
-        || this.keys['ArrowUp'] || this.keys['ArrowDown']
-        || this.keys['ArrowLeft'] || this.keys['ArrowRight'];
-      if (seatGone || wantsMove) {
-        this.standUp();
-        if (this.onStandUp) this.onStandUp();
-      } else {
-        this.velocity.set(0, 0, 0);
-        this.onGround = true;
-        if (this.seat) {
-          this.position.set(this.seat.anchorX, this.seat.top - 0.02, this.seat.anchorZ);
-          this.yaw = this.seat.yaw;
-          if (this._orbitMode) {
-            this.orbitYaw = this.seat.yaw;
-            this.bodyYaw = this.seat.yaw;
-          }
-        }
-        this._updateCameraOnly();
-        this._raycast();
-        return;
-      }
-    }
 
     // 计算移动方向（基于视角）。第三人称用相机轨道角，第一人称用角色 yaw。
     const viewYaw = this._orbitMode ? this.orbitYaw : this.yaw;
@@ -237,19 +205,13 @@ class Player {
     }
 
     // 更新相机
-    this._updateCameraOnly();
-
-    // 射线检测（目标方块）
-    this._raycast();
-  }
-
-  /** 根据当前眼睛高度更新相机位置与朝向（移动/坐卧共用） */
-  _updateCameraOnly() {
     this.camera.position.set(
       this.position.x,
       this.position.y + this.eyeHeight,
       this.position.z
     );
+
+    // 更新相机朝向
     const lookDir = new THREE.Vector3(
       -Math.sin(this.yaw) * Math.cos(this.pitch),
       Math.sin(this.pitch),
@@ -260,46 +222,9 @@ class Player {
       this.camera.position.y + lookDir.y,
       this.camera.position.z + lookDir.z
     );
-  }
 
-  /** 坐到 / 躺到家具上 */
-  sitOn(block, pose, yaw) {
-    const top = block.y + (pose === 'lie'
-      ? PlayerCharacter.POSE.lie.seatTop
-      : PlayerCharacter.POSE.sit.seatTop);
-    this.pose = pose;
-    this.velocity.set(0, 0, 0);
-    this.flying = false;
-    this.seat = {
-      x: block.x, y: block.y, z: block.z,
-      top, yaw,
-      anchorX: block.x + 0.5,
-      anchorZ: block.z + 0.5,
-    };
-    this.position.set(block.x + 0.5, top - 0.02, block.z + 0.5);
-    this.yaw = yaw;
-    this.bodyYaw = yaw;
-    if (this._orbitMode) this.orbitYaw = yaw;
-    this.eyeHeight = pose === 'lie'
-      ? PlayerCharacter.POSE.lie.eye
-      : PlayerCharacter.POSE.sit.eye;
-    this._updateCameraOnly();
-  }
-
-  /** 起身 */
-  standUp() {
-    if (this.pose === 'stand') return;
-    const seat = this.seat;
-    this.pose = 'stand';
-    this.seat = null;
-    this.eyeHeight = 1.6;
-    if (seat) {
-      // 站到家具前侧（面朝方向），避免卡进方块
-      const fx = -Math.sin(seat.yaw), fz = -Math.cos(seat.yaw);
-      this.position.set(seat.anchorX + fx * 0.62, seat.y + 1.02, seat.anchorZ + fz * 0.62);
-      this.velocity.set(0, 0, 0);
-    }
-    this._updateCameraOnly();
+    // 射线检测（目标方块）
+    this._raycast();
   }
 
   /**
@@ -355,19 +280,9 @@ class Player {
             continue;
           }
 
-          // 坐/卧家具使用矮碰撞盒（可跳上坐垫/床垫），其余固体为整格
-          const isSeat = blockType === BlockType.CHAIR_WOOD
-            || blockType === BlockType.SOFA_RED
-            || blockType === BlockType.BED_RED || blockType === BlockType.BED_BLUE
-            || blockType === BlockType.BED_GREEN || blockType === BlockType.BED_YELLOW;
-          const collideTop = isSeat
-            ? (blockType === BlockType.CHAIR_WOOD ? by + 0.52
-              : blockType === BlockType.SOFA_RED ? by + 0.5 : by + 0.56)
-            : blockMaxY;
-
           // 固体方块的 AABB
           const blockMin = { x: bx, y: by, z: bz };
-          const blockMax = { x: bx + 1, y: collideTop, z: bz + 1 };
+          const blockMax = { x: bx + 1, y: by + 1, z: bz + 1 };
 
           // 检测 AABB 重叠
           if (min.x < blockMax.x && max.x > blockMin.x &&
@@ -506,7 +421,6 @@ class Player {
 
   /** 放置方块 */
   placeBlock() {
-    if (this.pose !== 'stand') return false;
     if (!this.targetBlock || !this.targetFace) return false;
     // 手持装备（负 ID，剑/盾/盔甲）不能放置为方块
     if (!this.selectedBlock || this.selectedBlock < 0) return false;
@@ -543,7 +457,6 @@ class Player {
 
   /** 破坏方块 */
   breakBlock() {
-    if (this.pose !== 'stand') return false;
     if (!this.targetBlock) return false;
 
     const { x, y, z } = this.targetBlock;
@@ -714,7 +627,6 @@ class TouchController {
     const btnJump = document.getElementById('btnJump');
     const btnPlace = document.getElementById('btnPlace');
     const btnBreak = document.getElementById('btnBreak');
-    const btnSeat = document.getElementById('btnSeat');
 
     // 按钮按下时的视觉反馈
     const _flashBtn = (btn, isError) => {
@@ -753,18 +665,6 @@ class TouchController {
       btnJump.addEventListener('pointerup', _jumpUp);
       btnJump.addEventListener('pointercancel', _jumpUp);
       btnJump.addEventListener('pointerleave', _jumpUp);
-    }
-
-    if (btnSeat) {
-      const _seatDown = (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        if (this.game && this.game.interactSeat) {
-          this.game.interactSeat();
-          _flashBtn(btnSeat);
-        }
-      };
-      btnSeat.addEventListener('pointerdown', _seatDown);
     }
 
     if (btnPlace) {
@@ -823,11 +723,9 @@ class RemotePlayer {
     this.cur = new THREE.Vector3(info.x, info.y, info.z);
     this.targetYaw = info.yaw;
     this.yaw = info.yaw;
-    this.pose = info.pose || 'stand';
     this.nickname = info.nickname || '小探险家';
     this.avatar = new PlayerCharacter(scene);
     this.avatar.setSkin(info.skin || 'burger');
-    this.avatar.setPose(info.pose || 'stand');
     this.avatar.setVisible(true);
     this.avatar.group.visible = true;
     // 名字标签
@@ -939,11 +837,6 @@ class RemotePlayer {
   updateInfo(info) {
     this.target.set(info.x, info.y, info.z);
     this.targetYaw = info.yaw;
-    const pose = info.pose || 'stand';
-    if (pose !== this.pose) {
-      this.pose = pose;
-      if (this.avatar) this.avatar.setPose(pose);
-    }
     if (this.avatar && info.skin) {
       // 皮肤可能中途切换
       if (this._skin !== info.skin) { this._skin = info.skin; this.avatar.setSkin(info.skin); }
@@ -953,15 +846,11 @@ class RemotePlayer {
   _updateTransform(t) {
     this.cur.lerp(this.target, t);
     this.yaw += (this.targetYaw - this.yaw) * Math.min(1, t);
-    // 姿势（坐/躺/站）的模型位置、旋转、四肢全部交给 PlayerCharacter.update
-    this.avatar.update({
-      position: { x: this.cur.x, y: this.cur.y, z: this.cur.z },
-      yaw: this.yaw, pose: this.pose || 'stand',
-      velocity: { x: 0, z: 0 }, onGround: true, _orbitMode: false,
-    }, 0.016);
-    const headLift = (this.pose === 'lie') ? 1.05 : (this.pose === 'sit' ? 1.75 : 2.1);
-    this.label.position.set(this.cur.x, this.cur.y + headLift, this.cur.z);
-    this.bubble.position.set(this.cur.x, this.cur.y + headLift + 0.55, this.cur.z);
+    // PlayerCharacter 模型正面朝 +Z，组需 rotation.y = yaw + PI
+    this.avatar.group.position.set(this.cur.x, this.cur.y, this.cur.z);
+    this.avatar.group.rotation.y = this.yaw + Math.PI;
+    this.label.position.set(this.cur.x, this.cur.y + 2.1, this.cur.z);
+    this.bubble.position.set(this.cur.x, this.cur.y + 3.35, this.cur.z);
   }
 
   update(dt) {
@@ -1069,7 +958,6 @@ class Game {
       controlsPanel: document.getElementById('controlsPanel'),
     };
     this._teamPointerEl = document.getElementById('teamPointer');
-    this._seatHintEl = document.getElementById('seatHint');
     if (this._teamPointerEl) {
       this._teamPointerEl.addEventListener('click', (e) => { e.preventDefault(); this.teleportToTeammate(); });
     }
@@ -1077,11 +965,6 @@ class Game {
     this._recallOverTime = 0;
     this._recallCooldown = 0;
     this._initChatUI();
-
-    // 【关键】开始界面的"下一步/选特工"交互是纯 DOM 操作，必须在世界区块生成（init 中大量 await）
-    // 之前就绑定好。否则一旦区块生成中途卡住/挂起，欢迎页能显示但按钮永远点不动。
-    try { this._initCharSelect(); } catch (e) { console.warn('[char] 提前初始化失败', e); }
-    try { this._initStartSteps(); } catch (e) { console.warn('[steps] 提前初始化失败', e); }
 
     // 热键栏 9 格由 inventory.js 控制（E 键打开创造背包配置）
     this.hotbarCount = 9;
@@ -1562,69 +1445,6 @@ class Game {
     }
   }
 
-  /** 准星对准可坐/可躺家具时，在准星下方显示操作提示 */
-  _updateSeatHint() {
-    const el = this._seatHintEl;
-    if (!el) return;
-    if (this.player.pose !== 'stand') {
-      el.hidden = false;
-      el.innerHTML = '按 <b>F</b> 或移动起身';
-      const btn = document.getElementById('btnSeat');
-      if (btn) { btn.classList.add('show'); btn.textContent = '起'; }
-      return;
-    }
-    const t = this.player.targetBlock;
-    let label = '';
-    let btnText = '';
-    if (t) {
-      if (t.type === BlockType.CHAIR_WOOD) { label = '木椅 · 按 <b>F</b> 坐下'; btnText = '坐'; }
-      else if (t.type === BlockType.SOFA_RED) { label = '沙发 · 按 <b>F</b> 坐下'; btnText = '坐'; }
-      else if (t.type === BlockType.BED_RED || t.type === BlockType.BED_BLUE
-        || t.type === BlockType.BED_GREEN || t.type === BlockType.BED_YELLOW) { label = '小床 · 按 <b>F</b> 躺下'; btnText = '躺'; }
-    }
-    const btn = document.getElementById('btnSeat');
-    if (label) {
-      el.hidden = false; el.innerHTML = label;
-      if (btn) { btn.classList.add('show'); btn.textContent = btnText; }
-    } else {
-      el.hidden = true;
-      if (btn) btn.classList.remove('show');
-    }
-  }
-
-  /** 家具朝向 dir → 坐/卧时玩家面朝方向（furnDir 正面方向向量） */
-  _furnDirToYaw(dir) {
-    // 0=正面朝 +z（南） yaw=π；1=-x（西） yaw=π/2；2=-z（北） yaw=0；3=+x（东） yaw=-π/2
-    return [Math.PI, Math.PI / 2, 0, -Math.PI / 2][dir & 3];
-  }
-
-  /** 准星对准椅子/沙发/床时交互：坐下 / 躺下；已坐着再按则起身 */
-  interactSeat() {
-    if (!this.isRunning || !this.player) return;
-    if (this.player.pose !== 'stand') {
-      this.player.standUp();
-      if (this.playerChar) this.playerChar.setPose('stand');
-      this._toast('起身啦');
-      return;
-    }
-    const t = this.player.targetBlock;
-    if (!t) { this._toast('对准椅子、沙发或床再按哦'); return; }
-    let pose = null;
-    if (t.type === BlockType.CHAIR_WOOD || t.type === BlockType.SOFA_RED) pose = 'sit';
-    else if (t.type === BlockType.BED_RED || t.type === BlockType.BED_BLUE
-      || t.type === BlockType.BED_GREEN || t.type === BlockType.BED_YELLOW) pose = 'lie';
-    if (!pose) { this._toast('这个还不能坐哦'); return; }
-    // 预生成目标区块，并在座位周围补一圈，避免家具朝向读不到
-    this.world.update(t.x, t.z);
-    this.world.update(t.x + 1, t.z); this.world.update(t.x - 1, t.z);
-    this.world.update(t.x, t.z + 1); this.world.update(t.x, t.z - 1);
-    const dir = this.world.getFurnDirAt ? this.world.getFurnDirAt(t.x, t.y, t.z) : 0;
-    const yaw = this._furnDirToYaw(typeof dir === 'number' ? dir : 0);
-    this.player.sitOn(t, pose, yaw);
-    if (this.playerChar) this.playerChar.setPose(pose);
-    this._toast(pose === 'lie' ? '🛏️ 躺平休息啦，按 F 或移动起身' : '🪑 坐下啦，按 F 或移动起身');
-  }
-
   /** 传送到距离最近的队友身边（多人联机防走散） */
   teleportToTeammate() {
     if (!this.isRunning || !this.player) return;
@@ -2084,9 +1904,6 @@ class Game {
         if (this.world) this.saveNow(true);
       }
     });
-
-    // 世界与全部界面初始化完成：允许"开始冒险"进入
-    this._initReady = true;
   }
 
   /** 多人共建面板：昵称 / 建房 / 加入房间码 / 复制房码 */
@@ -2210,8 +2027,6 @@ class Game {
    *  采用「事件委托」：监听绑在 document 捕获层，点击落到角色卡任意位置（含头像/名字）
    *  都能命中；不依赖逐卡绑定，也不怕子元素吞事件。桌面移动通用。 */
   _initCharSelect() {
-    if (this._charSelectInited) return;
-    this._charSelectInited = true;
     this.character = this._getSelectedChar();
     const VALID = ['burger', 'fries', 'popcorn', 'witch'];
     const cards = () => Array.from(document.querySelectorAll('#startScreen .char-card'));
@@ -2282,8 +2097,6 @@ class Game {
   /** 开始界面标签页切换（开始游戏 / 留言墙 / 存档更多） */
   /** 开始界面两步引导：第 1 步欢迎+留言墙 → 第 2 步选特工+开始 */
   _initStartSteps() {
-    if (this._startStepsInited) return;
-    this._startStepsInited = true;
     const steps = Array.from(document.querySelectorAll('#startScreen .start-step'));
     const dots = Array.from(document.querySelectorAll('#startScreen .step-dots .sd'));
     const nextBtn = document.getElementById('stepNextBtn');
@@ -2488,31 +2301,12 @@ class Game {
 
   /** 初始化渲染器 */
   _initRenderer() {
-    let renderer = null;
-    try {
-      renderer = new THREE.WebGLRenderer({
-        canvas: this.canvas,
-        antialias: false,
-        powerPreference: this.isMobile ? 'low-power' : 'default',
-        preserveDrawingBuffer: true, // 支持作品集截图（toDataURL）
-      });
-    } catch (err) {
-      renderer = null;
-    }
-    if (!renderer || !renderer.getContext || !renderer.getContext()) {
-      // WebGL 不可用：明确提示，而不是继续进主循环导致画面/输入全卡死
-      this.renderer = null;
-      const tip = '当前浏览器无法开启 3D 渲染（WebGL）。请换用最新版 Chrome / Edge / Safari，'
-        + '或在系统设置里开启"硬件加速 / 硬件加速图形"后刷新重试。';
-      console.error('[WebGL 初始化失败]', tip);
-      if (window.__showErrorOverlay) window.__showErrorOverlay(tip);
-      const bar = document.getElementById('loadingFill');
-      if (bar) bar.style.width = '100%';
-      const lb = document.getElementById('loadingBar');
-      if (lb) lb.style.display = 'none';
-      throw new Error('WebGL context unavailable');
-    }
-    this.renderer = renderer;
+    this.renderer = new THREE.WebGLRenderer({
+      canvas: this.canvas,
+      antialias: false,
+      powerPreference: this.isMobile ? 'low-power' : 'default',
+      preserveDrawingBuffer: true, // 支持作品集截图（toDataURL）
+    });
     this.renderer.setSize(window.innerWidth, window.innerHeight);
     // 移动端降低像素比以提升性能
     const maxPixelRatio = this.isMobile ? 1.2 : 2;
@@ -3005,9 +2799,6 @@ class Game {
       this._scheduleSave();
       if (this.mp && this.mp.inRoom) this.mp.pushEdit(x, y, z, type, dir);
     };
-    this.player.onStandUp = () => {
-      if (this.playerChar) this.playerChar.setPose('stand');
-    };
   }
 
   /** 初始化方块高亮 */
@@ -3232,14 +3023,8 @@ class Game {
       }
       this.player.keys[e.code] = true;
 
-      // 双击空格 → 切换创造飞行（坐着/躺着时空格只用于起身）
+      // 双击空格 → 切换创造飞行
       if (e.code === 'Space') {
-        if (this.player.pose !== 'stand') {
-          this.player.standUp();
-          if (this.playerChar) this.playerChar.setPose('stand');
-          e.preventDefault();
-          return;
-        }
         const now = performance.now();
         if (this._lastSpace && now - this._lastSpace < 320) {
           this.player.flying = !this.player.flying;
@@ -3311,19 +3096,9 @@ class Game {
         this.takePhoto();
       }
 
-      // F 键：对准椅子/沙发/床 → 坐下/躺下/起身；否则保留撒花彩蛋
+      // F 键：隐藏彩蛋 —— 撒一波樱花/彩带庆祝（小朋友的惊喜）
       if (e.code === 'KeyF') {
-        const canSeat = this.player.pose !== 'stand' ||
-          (this.player.targetBlock && [
-            BlockType.CHAIR_WOOD, BlockType.SOFA_RED,
-            BlockType.BED_RED, BlockType.BED_BLUE,
-            BlockType.BED_GREEN, BlockType.BED_YELLOW,
-          ].includes(this.player.targetBlock.type));
-        if (canSeat) {
-          this.interactSeat();
-        } else {
-          this._celebrate();
-        }
+        this._celebrate();
       }
 
       // P 键打开作品集相册
@@ -3460,8 +3235,6 @@ class Game {
         if (this.isPointerLocked) {
           this.ui.pauseScreen.style.display = 'none';
           this._showGameUI(true);
-          const ov = document.getElementById('errOverlay');
-          if (ov) ov.hidden = true;
         } else if (this.isRunning && !this._suppressPause && !this._menuOpen && !this._anyMenuOpen()) {
           // 真正失去焦点（非打开背包/商店/相册）时才显示暂停菜单
           this.ui.pauseScreen.style.display = 'flex';
@@ -3470,18 +3243,11 @@ class Game {
 
       const requestLock = () => {
         if (!this.isPointerLocked && this.isRunning) {
-          try {
-            const r = this.canvas.requestPointerLock();
-            // 新版浏览器可能返回 Promise（失败会 reject），捕获后给出可恢复提示
-            if (r && typeof r.catch === 'function') {
-              r.catch((err) => this._onPointerLockFail(err));
-            }
-          } catch (err) { this._onPointerLockFail(err); }
+          this.canvas.requestPointerLock();
         }
       };
 
       const enterGame = () => {
-        if (!this._initReady) { this._toast('世界还在生成中，请稍等一两秒再点～'); return; }
         // 确保已同步当前选择的主角，避免“先进游戏后卡片没生效”
         this.character = this._getSelectedChar(); if (this.playerChar) this.playerChar.setSkin(this.character);
         // 第一人称手臂颜色也按所选角色重建
@@ -3515,14 +3281,11 @@ class Game {
 
       this.ui.pauseScreen.addEventListener('click', requestLock);
       this.canvas.addEventListener('click', requestLock);
-      // 指针锁定被浏览器/系统拒绝时，明确提示并允许点击画面重试，而不是卡在静止世界
-      this.canvas.addEventListener('pointerlockerror', () => this._onPointerLockFail(null));
     }
 
     // ----- 移动端：直接进入游戏 + 触摸控制 -----
     if (this.isMobile) {
       const enterGameMobile = () => {
-        if (!this._initReady) { this._toast('世界还在生成中，请稍等一两秒再点～'); return; }
         this.character = this._getSelectedChar(); if (this.playerChar) this.playerChar.setSkin(this.character);
         // 第一人称手臂颜色也按所选角色重建
         try { this._refreshHeldView(); } catch (e) {}
@@ -3565,23 +3328,6 @@ class Game {
 
     // 窗口尺寸变化
     window.addEventListener('resize', () => this._onResize());
-  }
-
-  /** 指针锁定失败：不能让世界静止死锁，回退到"点击继续"暂停屏，点击即重新请求锁定 */
-  _onPointerLockFail(err) {
-    if (err) console.warn('[指针锁定失败]', err);
-    if (!this.isRunning || this.isPointerLocked || this.isMobile) return;
-    if (window.__showErrorOverlay) {
-      window.__showErrorOverlay('鼠标锁定没成功（可能是浏览器弹窗拦截或权限问题）。点一下画面即可继续，若反复出现请用最新版 Chrome/Edge 全屏打开。');
-    }
-    // 短暂展示后自动收起浮层提示，避免长期遮挡（暂停屏提供点击恢复入口）
-    setTimeout(() => {
-      const ov = document.getElementById('errOverlay');
-      if (ov) ov.hidden = true;
-    }, 6000);
-    try {
-      if (this.ui && this.ui.pauseScreen) this.ui.pauseScreen.style.display = 'flex';
-    } catch (e) { /* ignore */ }
   }
 
   /** 显示/隐藏游戏HUD */
@@ -3667,10 +3413,6 @@ class Game {
       `生物: ${this.animalManager ? this.animalManager.animals.length : 0} 只 | ` +
       `掉落物: ${this.dropManager ? this.dropManager.count : 0}<br>` +
       `天气: ${weatherName} (T切换)${this.magnetMode ? ' | 收集中(9)' : ''}<br>` +
-      (this.mp && this.mp.inRoom
-        ? `联机: 房间 ${this.mp.roomCode} · ${(this.remotePlayers ? this.remotePlayers.count : 0) + 1}人 · ` +
-          `${this.mp.isRealtimeLive ? '实时通道✓' : '实时通道✗'} · HTTPS心跳${this.mp._restOk ? '✓' : '✗'}<br>`
-        : '') +
       `<span class="hud-keys">🗺️M 地图 · 🏠R 回家 · ❔Q 说明 · H 新手提示 · V 视角</span>`;
 
     this.ui.blockHighlight.style.display = 'none';
@@ -3679,7 +3421,6 @@ class Game {
   /** 主游戏循环 */
   animate() {
     requestAnimationFrame(() => this.animate());
-    if (!this.renderer || !this.scene || !this.camera) return;
 
     const dt = this.clock.getDelta();
 
@@ -3706,7 +3447,6 @@ class Game {
 
     // 桌面端指针锁定 或 移动端运行时更新游戏逻辑
     if (this.isPointerLocked || (this.isMobile && this.isRunning)) {
-     try {
       const wasOnGround = this.player.onGround;
       this.player.update(dt);
       // 起跳瞬间播放音效（地面 → 快速上升）
@@ -3715,13 +3455,12 @@ class Game {
       }
       this.world.update(this.player.position.x, this.player.position.z);
       this.highlight.update(this.player.targetBlock);
-      this._updateSeatHint();
       if (this.tutorial) this.tutorial.update(dt, this.player);
 
       // 多人：上报自己位置 + 平滑其他特工
       if (this.mp && this.mp.inRoom) {
         const yawForMp = (this.viewMode === 'third' && typeof this.player.orbitYaw === 'number') ? this.player.orbitYaw : this.player.yaw;
-        this.mp.updatePos(this.player.position.x, this.player.position.y, this.player.position.z, yawForMp, this.player.pose || 'stand');
+        this.mp.updatePos(this.player.position.x, this.player.position.y, this.player.position.z, yawForMp);
       }
       if (this.remotePlayers) this.remotePlayers.update(dt);
       this._updateTeamPointer();
@@ -3735,11 +3474,7 @@ class Game {
         const backX = Math.sin(oy) * Math.cos(op);
         const backZ = Math.cos(oy) * Math.cos(op);
         const backY = -Math.sin(op);
-        const pose = this.player.pose || 'stand';
-        const focusLift = pose === 'lie'
-          ? PlayerCharacter.POSE.lie.groupDY - 0.15
-          : pose === 'sit' ? PlayerCharacter.POSE.sit.groupDY + 0.05 : 0;
-        const focusY = this.player.position.y + this.player.eyeHeight * 0.82 + focusLift; // 看向角色躯干
+        const focusY = this.player.position.y + this.player.eyeHeight * 0.82; // 看向角色躯干
         let camX = this.player.position.x + backX * dist;
         let camY = focusY - backY * dist;
         let camZ = this.player.position.z + backZ * dist;
@@ -3769,15 +3504,6 @@ class Game {
         this.player.position.y + this.player.eyeHeight,
         this.player.position.z
       );
-    }
-     } catch (frameErr) {
-       // 单帧逻辑异常：记录一次并显示，但不中断后续帧（避免永久卡死）
-       if (!this._frameErrShown) {
-         this._frameErrShown = true;
-         console.error('[帧逻辑错误]', frameErr);
-         if (window.__showErrorOverlay) window.__showErrorOverlay('帧错误：' + (frameErr && frameErr.message));
-       }
-     }
     }
 
     // 昼夜循环（始终更新），并按玩家所在群系给远景雾轻微染色（空气透视）
@@ -3850,11 +3576,9 @@ class Game {
       this.windmill.update(dt);
     }
 
-    // 手持视图轻微摆动（坐/卧时隐藏第一人称手臂，避免悬空）
+    // 手持视图轻微摆动
     if (this.heldGroup && (this.isPointerLocked || (this.isMobile && this.isRunning))) {
-      const seated = this.player.pose !== 'stand';
-      this.heldGroup.visible = !seated;
-      const moving = !seated && this.player.onGround && (
+      const moving = this.player.onGround && (
         Math.abs(this.player.velocity.x) + Math.abs(this.player.velocity.z) > 0.5);
       this._heldBob += dt * (moving ? 9 : 2);
       let swingX = 0, swingRot = 0;
@@ -3893,16 +3617,8 @@ class Game {
       this._celebrates = this._celebrates.filter(fn => fn(dt));
     }
 
-    // 渲染（单独保护：渲染异常不应打断下一帧）
-    try {
-      this.renderer.render(this.scene, this.camera);
-    } catch (err) {
-      if (!this._renderErrShown) {
-        this._renderErrShown = true;
-        console.error('[渲染失败]', err);
-        if (window.__showErrorOverlay) window.__showErrorOverlay('渲染错误：' + (err && err.message));
-      }
-    }
+    // 渲染
+    this.renderer.render(this.scene, this.camera);
 
     // 更新UI
     if (this.frameCount % 10 === 0) {
@@ -3923,9 +3639,6 @@ window.addEventListener('DOMContentLoaded', async () => {
     console.error('[init 失败]', err);
     const bar = document.getElementById('loadingBar');
     if (bar) bar.style.display = 'none';
-    if (window.__showErrorOverlay) {
-      window.__showErrorOverlay('初始化失败：' + ((err && (err.stack || err.message)) || String(err)).split('\n').slice(0, 4).join(' ⏎ '));
-    }
   }
   // 即使 init 部分失败，也尽量启动主循环，避免"点击开始无反应"
   try {
@@ -3935,24 +3648,7 @@ window.addEventListener('DOMContentLoaded', async () => {
   }
 });
 
-// 全局兜底：任何未捕获错误都打印，并显示到屏幕浮层，避免静默卡死
-function __showErrorOverlay(msg) {
-  try {
-    const el = document.getElementById('errOverlay');
-    if (!el) return;
-    const line = document.createElement('div');
-    line.textContent = '⚠ ' + msg;
-    el.appendChild(line);
-    el.hidden = false;
-  } catch (e) { /* ignore */ }
-}
-window.__showErrorOverlay = __showErrorOverlay;
+// 全局兜底：任何未捕获错误都打印，避免静默卡死
 window.addEventListener('error', (e) => {
   console.error('[运行时错误]', e.message, e.filename, e.lineno, e.error);
-  __showErrorOverlay(`${e.message} (${(e.filename || '').split('/').pop()}:${e.lineno})`);
-});
-window.addEventListener('unhandledrejection', (e) => {
-  const msg = (e.reason && (e.reason.stack || e.reason.message)) || String(e.reason);
-  console.error('[未处理 Promise]', msg);
-  __showErrorOverlay('Promise: ' + String(msg).split('\n')[0]);
 });

@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
   <meta name="description" content="像素方块世界 - 3D像素风格方块世界探索游戏" />
   <title>美味特工队 · 像素方块训练基地</title>
-  <link rel="stylesheet" href="./styles/main.css?v=20260925an" />
+  <link rel="stylesheet" href="./styles/main.css?v=20260925ai" />
   <!-- 使用 importmap 引入 Three.js ES Module -->
   <script type="importmap">
   {
@@ -19,12 +19,8 @@
   <!-- 游戏渲染画布 -->
   <canvas id="gameCanvas"></canvas>
 
-  <!-- 运行时错误浮层（任何异常直接显示在屏幕上，便于排查，普通玩家通常看不到） -->
-  <div id="errOverlay" class="err-overlay" hidden></div>
-
   <!-- 十字准星 -->
   <div id="crosshair">+</div>
-  <div id="seatHint" class="seat-hint" hidden></div>
 
   <!-- 多人联机：队友过远时屏幕边缘方向指引（点击可一键传送到队友身边） -->
   <div id="teamPointer" class="team-pointer" title="点击传送到队友身边">
@@ -96,7 +92,7 @@
       <div class="control-row"><span class="key">P</span><span>🖼 打开作品集相册</span></div>
       <div class="control-row"><span class="key">Q</span><span>❔ 打开 / 收起本操作说明</span></div>
       <div class="control-row"><span class="key">H</span><span>🐰 关闭 / 重开新手任务提示</span></div>
-      <div class="control-row"><span class="key">F</span><span>对准椅子/沙发坐下、对准床躺下（再按或移动起身）</span></div>
+      <div class="control-row"><span class="key">F</span><span>小彩蛋（试试看～）</span></div>
       <div class="control-row"><span class="key">Ctrl+S</span><span>💾 立即手动保存（也会自动保存）</span></div>
       <div class="control-row"><span class="key">ESC</span><span>暂停</span></div>
     </div>
@@ -281,7 +277,6 @@
     <!-- 右侧操作按钮 -->
     <div id="actionButtons">
       <button id="btnJump" class="action-btn">跳</button>
-      <button id="btnSeat" class="action-btn" type="button">坐</button>
       <button id="btnBreak" class="action-btn">拆</button>
       <button id="btnPlace" class="action-btn">放</button>
     </div>
@@ -309,54 +304,18 @@
 
   <!-- 游戏主模块 -->
   <!-- Supabase 浏览器库（本地自包含，用于访客计数/点赞/留言） -->
-  <script src="./js/lib/supabase.umd.js?v=20260925an"></script>
+  <script src="./js/lib/supabase.umd.js"></script>
 
   <!-- 社区功能引导（开始界面的计数/点赞/留言） -->
   <script type="module">
-    import { Community } from './js/community.js?v=20260925an';
+    import { Community } from './js/community.js?v=20260925ai';
     try {
       const mount = document.getElementById('communityMount');
       if (mount) { const c = new Community(); c.mount(mount); }
     } catch (e) { console.warn('[community] 加载失败', e); }
   </script>
 
-  <script type="module" src="./js/game.js?v=20260925an"></script>
-
-  <!-- 零依赖兜底：即使游戏模块加载失败/卡住，欢迎页"下一步"也能翻到选特工页 -->
-  <script>
-  (function () {
-    function goStep(n) {
-      var steps = document.querySelectorAll('#startScreen .start-step');
-      var dots = document.querySelectorAll('#startScreen .step-dots .sd');
-      steps.forEach(function (s) {
-        var on = s.getAttribute('data-step') === String(n);
-        s.classList.toggle('active', on);
-        if (on) s.removeAttribute('hidden'); else s.setAttribute('hidden', '');
-      });
-      dots.forEach(function (d) {
-        d.classList.toggle('active', (d.textContent || '').trim() === String(n));
-      });
-    }
-    function onNext(e) {
-      var step2 = document.querySelector('#startScreen .start-step[data-step="2"]');
-      // 第 2 步已显示则交给 game.js；否则本兜底负责翻页（绝不重复拦截）
-      if (step2 && !step2.hasAttribute('hidden')) return;
-      if (e) { e.preventDefault(); e.stopPropagation(); }
-      goStep(2);
-    }
-    function bindFallback() {
-      var btn = document.getElementById('stepNextBtn');
-      if (btn && !btn.__fallbackBound) {
-        btn.__fallbackBound = true;
-        btn.addEventListener('click', onNext, true);
-        btn.addEventListener('touchstart', onNext, { passive: false, capture: true });
-      }
-    }
-    if (document.readyState === 'loading') {
-      document.addEventListener('DOMContentLoaded', bindFallback);
-    } else { bindFallback(); }
-  })();
-  </script>
+  <script type="module" src="./js/game.js?v=20260925ai"></script>
 
   <!-- 兜底：模块若加载失败或卡住，给出可见提示而不是无限"生成世界中..." -->
   <script>
