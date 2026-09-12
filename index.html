@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
   <meta name="description" content="像素方块世界 - 3D像素风格方块世界探索游戏" />
   <title>美味特工队 · 像素方块训练基地</title>
-  <link rel="stylesheet" href="./styles/main.css?v=20260925l" />
+  <link rel="stylesheet" href="./styles/main.css?v=20260925aa" />
   <!-- 使用 importmap 引入 Three.js ES Module -->
   <script type="importmap">
   {
@@ -34,9 +34,9 @@
   <!-- 调试信息 -->
   <div id="debugInfo"></div>
 
-  <!-- 右上角操作说明面板（桌面端常驻） -->
-  <div id="controlsPanel" class="desktop-only">
-    <div class="controls-trigger">?</div>
+  <!-- 右上角操作说明面板（桌面端常驻，可点击收起/展开） -->
+  <div id="controlsPanel" class="desktop-only collapsed">
+    <button id="controlsTrigger" class="controls-trigger" type="button" aria-label="操作说明" title="操作说明（点击展开/收起）">?</button>
     <div class="controls-body">
       <div class="control-row"><span class="key">W A S D</span><span>移动</span></div>
       <div class="control-row"><span class="key">鼠标</span><span>视角旋转</span></div>
@@ -45,15 +45,18 @@
       <div class="control-row"><span class="key">空格</span><span>跳跃 / 水中上浮</span></div>
       <div class="control-row"><span class="key">双击空格</span><span>切换飞行（空格上升 / Shift 下降）</span></div>
       <div class="control-row"><span class="key">1-9</span><span>选择快捷栏</span></div>
+      <div class="control-row"><span class="key">M</span><span>🗺 打开世界地图</span></div>
       <div class="control-row"><span class="key">E</span><span>打开创造背包（选方块放入快捷栏）</span></div>
       <div class="control-row"><span class="key">G</span><span>装备兑换（床、家具、生活用品）</span></div>
       <div class="control-row"><span class="key">V</span><span>切换第一 / 第三人称（看自己）</span></div>
+      <div class="control-row"><span class="key">R</span><span>🏠 一键回到出生点</span></div>
       <div class="control-row"><span class="key">9（空槽）</span><span>吸引/收集掉落物</span></div>
       <div class="control-row"><span class="key">滚轮/Shift+滚轮</span><span>切换方块</span></div>
       <div class="control-row"><span class="key">T</span><span>切换天气（晴/雨/雪）</span></div>
       <div class="control-row"><span class="key">C</span><span>📷 拍照存入作品集</span></div>
       <div class="control-row"><span class="key">P</span><span>🖼 打开作品集相册</span></div>
-      <div class="control-row"><span class="key">H</span><span>收起/重开新手提示</span></div>
+      <div class="control-row"><span class="key">Q</span><span>❔ 打开 / 收起本操作说明</span></div>
+      <div class="control-row"><span class="key">H</span><span>🐰 关闭 / 重开新手任务提示</span></div>
       <div class="control-row"><span class="key">F</span><span>小彩蛋（试试看～）</span></div>
       <div class="control-row"><span class="key">Ctrl+S</span><span>💾 立即手动保存（也会自动保存）</span></div>
       <div class="control-row"><span class="key">ESC</span><span>暂停</span></div>
@@ -98,15 +101,16 @@
 
       <div class="start-welcome">欢迎来到美味特工队像素方块基地！<br>自由建造 · 探索世界 · 和小动物做朋友～</div>
 
+      <button id="stepNextBtn" class="start-play-btn" type="button">
+        <span class="spb-arrow">▶</span> 下一步：选特工 <span class="spb-arrow">▶</span>
+      </button>
+
       <div class="step-box">
         <div class="step-box-title">💬 大家的留言墙</div>
         <div id="communityMount"></div>
         <div class="tab-hint">这里能看到访客数、给游戏点赞、留下你的留言～（留言需妈妈审核后展示）</div>
       </div>
 
-      <button id="stepNextBtn" class="start-play-btn" type="button">
-        <span class="spb-arrow">▶</span> 下一步：选特工 <span class="spb-arrow">▶</span>
-      </button>
       <a class="admin-link" href="./admin.html" target="_blank" rel="noopener" onclick="event.stopPropagation()">🔒 妈妈留言审核台</a>
     </div>
 
@@ -152,6 +156,45 @@
       <input type="file" id="importFile" accept="application/json,.json" style="display:none">
       <div class="save-note">本地自动保存（同设备）；导出文件可备份或换设备导入。游戏内 Ctrl+S 手动保存。</div>
     </div>
+
+    <!-- 多人共建面板（未配置云端时自动隐藏） -->
+    <div class="mp-card" id="mpBox">
+      <div class="mp-card-head">
+        <span class="mp-globe" aria-hidden="true">🌐</span>
+        <div class="mp-head-text">
+          <div class="mp-title">多人共建</div>
+          <div class="mp-subtitle">和小伙伴进同一个世界，一起搭方块！</div>
+        </div>
+        <span class="mp-badge" id="mpBadge">在线</span>
+      </div>
+      <div class="mp-card-body">
+        <div class="mp-field">
+          <label for="mpName">你的昵称</label>
+          <input id="mpName" class="mp-input" type="text" maxlength="12" autocomplete="off" placeholder="取个名字，如：Heidi">
+        </div>
+        <div class="mp-cols">
+          <button id="mpCreate" class="mp-btn mp-btn-create" type="button">
+            <span class="mp-btn-ico">🏠</span><span>创建新房间</span>
+          </button>
+          <div class="mp-or"><i></i><span>或</span><i></i></div>
+          <div class="mp-join">
+            <input id="mpCode" class="mp-input mp-code" type="text" maxlength="6" autocomplete="off" placeholder="房间码">
+            <button id="mpJoin" class="mp-btn mp-btn-join" type="button">
+              <span class="mp-btn-ico">🚪</span><span>加入</span>
+            </button>
+          </div>
+        </div>
+        <div id="mpCodeBar" class="mp-codebar" style="display:none;">
+          <span class="mp-codebar-label">房间码</span>
+          <span id="mpCodeValue" class="mp-code-value">------</span>
+          <button id="mpCopy" class="mp-copy" type="button">📋 复制</button>
+        </div>
+        <div id="mpStatus" class="mp-status">点「创建新房间」拿到房间码，把码发给小伙伴；或输入小伙伴的房间码加入。大家放/拆的方块会实时同步，还能看到彼此的小特工！</div>
+        <div class="mp-steps">
+          <span>① 填昵称</span><span>② 建房或输入房码</span><span>③ 点「开始冒险」一起搭</span>
+        </div>
+      </div>
+    </div>
     <details class="controls-info desktop-only controls-collapse">
       <summary>⌨️ 键盘操作说明（点击展开/收起）</summary>
       <div class="controls-collapse-body">
@@ -166,11 +209,14 @@
       <div class="control-row"><span class="key">E</span><span>打开创造背包（选方块）</span></div>
       <div class="control-row"><span class="key">滚轮/Shift+滚轮</span><span>切换方块（含矿石/建材）</span></div>
       <div class="control-row"><span class="key">T</span><span>切换天气</span></div>
-      <div class="control-row"><span class="key">V</span><span>切换第一/第三人称</span></div>
+      <div class="control-row"><span class="key">V</span><span>切换第一/第三人称（可 360° 环绕看自己）</span></div>
+      <div class="control-row"><span class="key">M</span><span>打开世界地图（看群系与自己位置）</span></div>
+      <div class="control-row"><span class="key">R</span><span>一键回到出生点（迷路/卡住时用）</span></div>
+      <div class="control-row"><span class="key">Q</span><span>打开 / 收起游戏内操作说明</span></div>
       <div class="control-row"><span class="key">G</span><span>打开兑换商店</span></div>
       <div class="control-row"><span class="key">C</span><span>拍照存进作品集</span></div>
       <div class="control-row"><span class="key">P</span><span>打开作品集相册</span></div>
-      <div class="control-row"><span class="key">H</span><span>关闭/重开新手提示</span></div>
+      <div class="control-row"><span class="key">H</span><span>关闭/重开新手任务提示</span></div>
       <div class="control-row"><span class="key">F</span><span>小彩蛋（试试看～）</span></div>
       <div class="control-row"><span class="key">Ctrl+S</span><span>💾 立即手动保存（游戏也会自动保存）</span></div>
       <div class="control-row"><span class="key">ESC</span><span>暂停</span></div>
@@ -208,6 +254,7 @@
       <button class="m-fn" data-fn="view" type="button">👁️<span>视角</span></button>
       <button class="m-fn" data-fn="fly" type="button">🕊️<span>飞行</span></button>
       <button class="m-fn" data-fn="home" type="button">🏠<span>回家</span></button>
+      <button class="m-fn" data-fn="map" type="button">🗺️<span>地图</span></button>
       <button class="m-fn" data-fn="weather" type="button">🌦️<span>天气</span></button>
       <button class="m-fn" data-fn="help" type="button">❓<span>说明</span></button>
     </div>
@@ -222,14 +269,14 @@
 
   <!-- 社区功能引导（开始界面的计数/点赞/留言） -->
   <script type="module">
-    import { Community } from './js/community.js?v=20260925l';
+    import { Community } from './js/community.js?v=20260925aa';
     try {
       const mount = document.getElementById('communityMount');
       if (mount) { const c = new Community(); c.mount(mount); }
     } catch (e) { console.warn('[community] 加载失败', e); }
   </script>
 
-  <script type="module" src="./js/game.js?v=20260925l"></script>
+  <script type="module" src="./js/game.js?v=20260925aa"></script>
 
   <!-- 兜底：模块若加载失败或卡住，给出可见提示而不是无限"生成世界中..." -->
   <script>

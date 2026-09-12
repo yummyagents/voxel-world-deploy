@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { SimplexNoise } from './noise.js?v=20260925l';
+import { SimplexNoise } from './noise.js?v=20260925aa';
 
 /* ============================================
    常量
@@ -107,6 +107,36 @@ export const BlockType = {
   CLOCK_BLOCK: 84,      // 钟
   TORCH: 85,            // 火把（十字形）
   FENCE: 86,            // 木围栏
+  // === 照明（明亮柔和，无灵魂系） ===
+  CANDLE_PINK: 87,      // 粉蜡烛
+  CANDLE_BLUE: 88,      // 蓝蜡烛
+  CANDLE_YELLOW: 89,    // 黄蜡烛
+  REDSTONE_LAMP: 90,    // 红石吸顶灯
+  // === 透光（窗户/落地窗） ===
+  GLASS_PINK: 91,       // 粉染色玻璃
+  GLASS_BLUE: 92,       // 浅蓝染色玻璃
+  GLASS_YELLOW: 93,     // 浅黄染色玻璃
+  GLASS_PANE: 94,       // 玻璃板
+  // === 家具/工作台 ===
+  SLAB: 95,             // 台阶/半砖（橡木半砖）
+  TRAPDOOR: 96,         // 活板门
+  LECTERN: 97,          // 讲台
+  CARTOGRAPHY: 98,      // 制图台
+  LOOM: 99,             // 织布机
+  BARREL: 100,          // 木桶
+  ITEM_FRAME: 101,      // 物品展示框（美食展示）
+  // === 装饰 ===
+  AZALEA_LEAVES: 102,   // 杜鹃叶
+  SWEET_BERRY: 103,     // 甜浆果丛（十字形）
+  MOSS_BLOCK: 104,      // 苔藓块
+  // === 甜品主题 ===
+  BURGER: 105,          // 汉堡方块
+  FRIES: 106,           // 薯条方块
+  SUGAR: 107,           // 糖块
+  HONEY_BLOCK: 108,     // 蜂蜜块
+  HONEYCOMB: 109,       // 蜜脾块
+  TERRACOTTA_PINK: 110, // 浅粉陶瓦（外墙）
+  TERRACOTTA_ORANGE: 111, // 浅橙陶瓦（外墙）
   // 注意：Uint8 最大 255，还有扩展空间
 };
 
@@ -198,6 +228,31 @@ export const BlockNames = {
   [BlockType.CLOCK_BLOCK]: '钟',
   [BlockType.TORCH]: '火把',
   [BlockType.FENCE]: '木围栏',
+  [BlockType.CANDLE_PINK]: '粉蜡烛',
+  [BlockType.CANDLE_BLUE]: '蓝蜡烛',
+  [BlockType.CANDLE_YELLOW]: '黄蜡烛',
+  [BlockType.REDSTONE_LAMP]: '吸顶灯',
+  [BlockType.GLASS_PINK]: '粉玻璃',
+  [BlockType.GLASS_BLUE]: '浅蓝玻璃',
+  [BlockType.GLASS_YELLOW]: '浅黄玻璃',
+  [BlockType.GLASS_PANE]: '玻璃板',
+  [BlockType.SLAB]: '台阶半砖',
+  [BlockType.TRAPDOOR]: '活板门',
+  [BlockType.LECTERN]: '讲台',
+  [BlockType.CARTOGRAPHY]: '制图台',
+  [BlockType.LOOM]: '织布机',
+  [BlockType.BARREL]: '木桶',
+  [BlockType.ITEM_FRAME]: '展示框',
+  [BlockType.AZALEA_LEAVES]: '杜鹃叶',
+  [BlockType.SWEET_BERRY]: '甜浆果丛',
+  [BlockType.MOSS_BLOCK]: '苔藓块',
+  [BlockType.BURGER]: '汉堡方块',
+  [BlockType.FRIES]: '薯条方块',
+  [BlockType.SUGAR]: '糖块',
+  [BlockType.HONEY_BLOCK]: '蜂蜜块',
+  [BlockType.HONEYCOMB]: '蜜脾块',
+  [BlockType.TERRACOTTA_PINK]: '浅粉陶瓦',
+  [BlockType.TERRACOTTA_ORANGE]: '浅橙陶瓦',
 };
 
 /** 判断方块是否固体（有碰撞） */
@@ -207,7 +262,7 @@ export function isSolid(type) {
     && type !== BlockType.FLOWER_YELLOW && type !== BlockType.FLOWER_WHITE
     && type !== BlockType.MUSHROOM_RED && type !== BlockType.MUSHROOM_BROWN
     && type !== BlockType.DEAD_BUSH && type !== BlockType.TORCH
-    && type !== BlockType.LADDER;
+    && type !== BlockType.LADDER && type !== BlockType.SWEET_BERRY;
 }
 
 /** 判断方块是否液体 */
@@ -215,13 +270,27 @@ export function isLiquid(type) {
   return type === BlockType.WATER;
 }
 
+/** 家具/装饰微模型方块：不按"完整立方体+纹理"渲染，由 furniture.js 生成 3D 造型 */
+export function isFurniture(type) {
+  return type === BlockType.BED_RED || type === BlockType.BED_BLUE
+    || type === BlockType.BED_GREEN || type === BlockType.BED_YELLOW
+    || type === BlockType.TABLE_WOOD || type === BlockType.CHAIR_WOOD
+    || type === BlockType.SOFA_RED || type === BlockType.CHEST
+    || type === BlockType.SLAB || type === BlockType.FENCE
+    || type === BlockType.TRAPDOOR || type === BlockType.LANTERN
+    || type === BlockType.CANDLE_PINK || type === BlockType.CANDLE_BLUE
+    || type === BlockType.CANDLE_YELLOW;
+}
+
 /** 判断方块是否透明（不遮挡相邻面） */
 export function isTransparent(type) {
   return type === BlockType.AIR || type === BlockType.WATER || type === BlockType.GLASS
+    || type === BlockType.GLASS_PINK || type === BlockType.GLASS_BLUE
+    || type === BlockType.GLASS_YELLOW || type === BlockType.GLASS_PANE
     || type === BlockType.LEAVES || type === BlockType.BIRCH_LEAVES
     || type === BlockType.JUNGLE_LEAVES || type === BlockType.CHERRY_LEAVES
     || type === BlockType.SPRUCE_LEAVES || type === BlockType.ACACIA_LEAVES
-    || type === BlockType.DARK_OAK_LEAVES
+    || type === BlockType.DARK_OAK_LEAVES || type === BlockType.AZALEA_LEAVES
     || type === BlockType.TALL_GRASS || type === BlockType.FLOWER_RED
     || type === BlockType.FLOWER_YELLOW || type === BlockType.FLOWER_WHITE
     || type === BlockType.MUSHROOM_RED || type === BlockType.MUSHROOM_BROWN
@@ -229,7 +298,12 @@ export function isTransparent(type) {
     || type === BlockType.PACKED_ICE || type === BlockType.SEA_LANTERN
     || type === BlockType.TORCH || type === BlockType.LADDER
     || type === BlockType.LANTERN || type === BlockType.GLOWSTONE
-    || type === BlockType.PAINTING || type === BlockType.FLOWER_POT;
+    || type === BlockType.CANDLE_PINK || type === BlockType.CANDLE_BLUE
+    || type === BlockType.CANDLE_YELLOW || type === BlockType.REDSTONE_LAMP
+    || type === BlockType.SWEET_BERRY || type === BlockType.HONEY_BLOCK
+    || type === BlockType.PAINTING || type === BlockType.FLOWER_POT
+    || type === BlockType.ITEM_FRAME
+    || isFurniture(type);
 }
 
 /** 判断是否十字形植物 */
@@ -237,7 +311,8 @@ export function isCrossBlock(type) {
   return type === BlockType.TALL_GRASS || type === BlockType.FLOWER_RED
     || type === BlockType.FLOWER_YELLOW || type === BlockType.FLOWER_WHITE
     || type === BlockType.MUSHROOM_RED || type === BlockType.MUSHROOM_BROWN
-    || type === BlockType.DEAD_BUSH || type === BlockType.TORCH;
+    || type === BlockType.DEAD_BUSH || type === BlockType.TORCH
+    || type === BlockType.SWEET_BERRY;
 }
 
 /** 破坏方块的掉落物映射 */
@@ -280,7 +355,7 @@ export function getBlockDrop(type) {
    ============================================ */
 export const TEX_SIZE = 16;
 export const ATLAS_COLS = 16;
-export const ATLAS_ROWS = 8;
+export const ATLAS_ROWS = 16;
 const ATLAS_W = ATLAS_COLS * TEX_SIZE;
 const ATLAS_H = ATLAS_ROWS * TEX_SIZE;
 
@@ -317,6 +392,14 @@ const TEX = {
   CHEST: 97, LADDER: 98, DOOR: 99, LANTERN: 100,
   PAINTING: 101, FLOWER_POT: 102, TABLE_WOOD: 103, CHAIR_WOOD: 104,
   SOFA_RED: 105, CLOCK_BLOCK: 106, TORCH: 107, FENCE: 108,
+  // 新道具纹理
+  CANDLE_PINK: 109, CANDLE_BLUE: 110, CANDLE_YELLOW: 111, REDSTONE_LAMP: 112,
+  GLASS_PINK: 113, GLASS_BLUE: 114, GLASS_YELLOW: 115, GLASS_PANE: 116,
+  SLAB: 117, TRAPDOOR: 118, LECTERN: 119, CARTOGRAPHY: 120, LOOM: 121,
+  BARREL: 122, BARREL_TOP: 123, ITEM_FRAME: 124,
+  AZALEA_LEAVES: 125, SWEET_BERRY: 126, MOSS_BLOCK: 127,
+  BURGER: 128, FRIES: 129, SUGAR: 130, HONEY_BLOCK: 131, HONEYCOMB: 132,
+  TERRACOTTA_PINK: 133, TERRACOTTA_ORANGE: 134,
 };
 
 /** 方块纹理映射 { top, bottom, side } 或 'cross' */
@@ -407,6 +490,37 @@ export const BLOCK_TEXTURES = {
   [BlockType.SOFA_RED]: { top: TEX.SOFA_RED, bottom: TEX.SOFA_RED, side: TEX.SOFA_RED },
   [BlockType.CLOCK_BLOCK]: { top: TEX.CLOCK_BLOCK, bottom: TEX.PLANKS, side: TEX.CLOCK_BLOCK },
   [BlockType.TORCH]: 'cross',
+  [BlockType.FENCE]: { top: TEX.FENCE, bottom: TEX.FENCE, side: TEX.FENCE },
+  // 照明
+  [BlockType.CANDLE_PINK]: { top: TEX.CANDLE_PINK, bottom: TEX.CANDLE_PINK, side: TEX.CANDLE_PINK },
+  [BlockType.CANDLE_BLUE]: { top: TEX.CANDLE_BLUE, bottom: TEX.CANDLE_BLUE, side: TEX.CANDLE_BLUE },
+  [BlockType.CANDLE_YELLOW]: { top: TEX.CANDLE_YELLOW, bottom: TEX.CANDLE_YELLOW, side: TEX.CANDLE_YELLOW },
+  [BlockType.REDSTONE_LAMP]: { top: TEX.REDSTONE_LAMP, bottom: TEX.REDSTONE_LAMP, side: TEX.REDSTONE_LAMP },
+  // 透光
+  [BlockType.GLASS_PINK]: { top: TEX.GLASS_PINK, bottom: TEX.GLASS_PINK, side: TEX.GLASS_PINK },
+  [BlockType.GLASS_BLUE]: { top: TEX.GLASS_BLUE, bottom: TEX.GLASS_BLUE, side: TEX.GLASS_BLUE },
+  [BlockType.GLASS_YELLOW]: { top: TEX.GLASS_YELLOW, bottom: TEX.GLASS_YELLOW, side: TEX.GLASS_YELLOW },
+  [BlockType.GLASS_PANE]: { top: TEX.GLASS_PANE, bottom: TEX.GLASS_PANE, side: TEX.GLASS_PANE },
+  // 家具
+  [BlockType.SLAB]: { top: TEX.SLAB, bottom: TEX.PLANKS, side: TEX.SLAB },
+  [BlockType.TRAPDOOR]: { top: TEX.TRAPDOOR, bottom: TEX.TRAPDOOR, side: TEX.TRAPDOOR },
+  [BlockType.LECTERN]: { top: TEX.LECTERN, bottom: TEX.PLANKS, side: TEX.LECTERN },
+  [BlockType.CARTOGRAPHY]: { top: TEX.CARTOGRAPHY, bottom: TEX.PLANKS, side: TEX.CARTOGRAPHY },
+  [BlockType.LOOM]: { top: TEX.LOOM, bottom: TEX.PLANKS, side: TEX.LOOM },
+  [BlockType.BARREL]: { top: TEX.BARREL_TOP, bottom: TEX.BARREL_TOP, side: TEX.BARREL },
+  [BlockType.ITEM_FRAME]: { top: TEX.ITEM_FRAME, bottom: TEX.ITEM_FRAME, side: TEX.ITEM_FRAME },
+  // 装饰
+  [BlockType.AZALEA_LEAVES]: { top: TEX.AZALEA_LEAVES, bottom: TEX.AZALEA_LEAVES, side: TEX.AZALEA_LEAVES },
+  [BlockType.SWEET_BERRY]: 'cross',
+  [BlockType.MOSS_BLOCK]: { top: TEX.MOSS_BLOCK, bottom: TEX.MOSS_BLOCK, side: TEX.MOSS_BLOCK },
+  // 甜品
+  [BlockType.BURGER]: { top: TEX.BURGER, bottom: TEX.BURGER, side: TEX.BURGER },
+  [BlockType.FRIES]: { top: TEX.FRIES, bottom: TEX.FRIES, side: TEX.FRIES },
+  [BlockType.SUGAR]: { top: TEX.SUGAR, bottom: TEX.SUGAR, side: TEX.SUGAR },
+  [BlockType.HONEY_BLOCK]: { top: TEX.HONEY_BLOCK, bottom: TEX.HONEY_BLOCK, side: TEX.HONEY_BLOCK },
+  [BlockType.HONEYCOMB]: { top: TEX.HONEYCOMB, bottom: TEX.HONEYCOMB, side: TEX.HONEYCOMB },
+  [BlockType.TERRACOTTA_PINK]: { top: TEX.TERRACOTTA_PINK, bottom: TEX.TERRACOTTA_PINK, side: TEX.TERRACOTTA_PINK },
+  [BlockType.TERRACOTTA_ORANGE]: { top: TEX.TERRACOTTA_ORANGE, bottom: TEX.TERRACOTTA_ORANGE, side: TEX.TERRACOTTA_ORANGE },
 };
 
 /* ============================================
@@ -1152,6 +1266,178 @@ function createAtlasCanvas() {
     c.fillRect(0, 5, 16, 1); c.fillRect(0, 11, 16, 1);
   });
 
+  /* ===== 新道具纹理（明亮柔和童话风） ===== */
+  // 蜡烛：蜡体 + 烛芯 + 小火焰
+  const drawCandle = (wax) => (c) => {
+    c.clearRect(0, 0, 16, 16);
+    c.fillStyle = wax; c.fillRect(5, 6, 6, 9);
+    c.fillStyle = 'rgba(255,255,255,0.35)'; c.fillRect(5, 6, 2, 9);
+    c.fillStyle = '#4a3520'; c.fillRect(7, 4, 1, 2);
+    c.fillStyle = '#ffcf4d'; c.fillRect(6, 1, 3, 4);
+    c.fillStyle = '#fff6c8'; c.fillRect(7, 2, 1, 2);
+  };
+  drawTexture(ctx, TEX.CANDLE_PINK, drawCandle('#f6a8c8'));
+  drawTexture(ctx, TEX.CANDLE_BLUE, drawCandle('#9fd0f0'));
+  drawTexture(ctx, TEX.CANDLE_YELLOW, drawCandle('#f7e08a'));
+  // 红石吸顶灯：明亮奶白格 + 金边
+  drawTexture(ctx, TEX.REDSTONE_LAMP, c => {
+    fillNoisy(c, 245, 236, 200, 8);
+    c.fillStyle = '#caa53d';
+    c.fillRect(0, 0, 16, 1); c.fillRect(0, 15, 16, 1);
+    c.fillRect(0, 0, 1, 16); c.fillRect(15, 0, 1, 16);
+    c.fillStyle = 'rgba(255,255,255,0.7)';
+    c.fillRect(3, 3, 4, 4); c.fillRect(9, 9, 4, 4);
+  });
+  // 染色玻璃：透明中心 + 彩色边框 + 高光
+  const drawStainedGlass = (tint) => (c) => {
+    c.clearRect(0, 0, 16, 16);
+    c.fillStyle = tint;
+    c.fillRect(0, 0, 16, 1); c.fillRect(0, 15, 16, 1);
+    c.fillRect(0, 0, 1, 16); c.fillRect(15, 0, 1, 16);
+    c.fillRect(7, 1, 1, 14); c.fillRect(1, 7, 14, 1);
+    c.fillStyle = 'rgba(255,255,255,0.28)';
+    c.fillRect(2, 2, 4, 1); c.fillRect(2, 2, 1, 4);
+  };
+  drawTexture(ctx, TEX.GLASS_PINK, drawStainedGlass('rgba(246,168,200,0.85)'));
+  drawTexture(ctx, TEX.GLASS_BLUE, drawStainedGlass('rgba(160,210,240,0.85)'));
+  drawTexture(ctx, TEX.GLASS_YELLOW, drawStainedGlass('rgba(246,228,150,0.85)'));
+  // 玻璃板：透明 + 细框（落地窗）
+  drawTexture(ctx, TEX.GLASS_PANE, c => {
+    c.clearRect(0, 0, 16, 16);
+    c.fillStyle = 'rgba(220,238,250,0.9)';
+    c.fillRect(0, 0, 16, 1); c.fillRect(0, 15, 16, 1);
+    c.fillRect(0, 0, 1, 16); c.fillRect(15, 0, 1, 16);
+    c.fillStyle = 'rgba(255,255,255,0.3)'; c.fillRect(2, 2, 3, 1);
+  });
+  // 台阶半砖：上半木半空
+  drawTexture(ctx, TEX.SLAB, c => {
+    fillNoisy(c, 178, 140, 80, 14);
+    c.fillStyle = '#7a532c'; c.fillRect(0, 7, 16, 1);
+    c.fillStyle = 'rgba(0,0,0,0.12)'; c.fillRect(0, 8, 16, 8);
+  });
+  // 活板门：木板格栅
+  drawTexture(ctx, TEX.TRAPDOOR, c => {
+    fillNoisy(c, 160, 116, 66, 14);
+    c.fillStyle = '#6e4a26';
+    c.fillRect(0, 3, 16, 1); c.fillRect(0, 11, 16, 1);
+    c.fillRect(5, 0, 1, 16); c.fillRect(10, 0, 1, 16);
+  });
+  // 讲台：木台 + 书本
+  drawTexture(ctx, TEX.LECTERN, c => {
+    fillNoisy(c, 150, 104, 60, 14);
+    c.fillStyle = '#7a532c'; c.fillRect(2, 10, 12, 4);
+    c.fillStyle = '#f4e8d0'; c.fillRect(3, 5, 10, 5);  // 书页
+    c.fillStyle = '#b5404a'; c.fillRect(7, 5, 1, 5);
+    c.fillStyle = '#5a3a1c'; c.fillRect(6, 14, 4, 2);
+  });
+  // 制图台：木面 + 地图
+  drawTexture(ctx, TEX.CARTOGRAPHY, c => {
+    fillNoisy(c, 178, 140, 80, 14);
+    c.fillStyle = '#e8dcc0'; c.fillRect(2, 2, 12, 9);  // 纸张
+    c.strokeStyle = '#7a8f6a'; c.lineWidth = 1;
+    c.beginPath(); c.moveTo(3, 8); c.lineTo(13, 5); c.stroke();
+    c.beginPath(); c.moveTo(5, 3); c.lineTo(9, 10); c.stroke();
+    c.fillStyle = '#c44'; c.fillRect(10, 8, 2, 2);
+    c.fillStyle = '#6e4a26'; c.fillRect(2, 12, 12, 2);
+  });
+  // 织布机：木框 + 彩线
+  drawTexture(ctx, TEX.LOOM, c => {
+    fillNoisy(c, 150, 104, 60, 14);
+    c.fillStyle = '#6e4a26'; c.fillRect(2, 2, 12, 12);
+    const cols = ['#e8709a', '#f0c64d', '#6aa8e0', '#7fc36a'];
+    cols.forEach((col, i) => { c.fillStyle = col; c.fillRect(3 + i * 3, 3, 2, 10); });
+  });
+  // 木桶侧面 / 顶面
+  drawTexture(ctx, TEX.BARREL, c => {
+    fillNoisy(c, 128, 88, 48, 16);
+    c.fillStyle = '#5a3a1c';
+    c.fillRect(0, 3, 16, 1); c.fillRect(0, 12, 16, 1);
+    c.fillRect(0, 0, 1, 16); c.fillRect(15, 0, 1, 16);
+    c.strokeStyle = 'rgba(70,44,20,0.6)';
+    for (let i = 3; i < 16; i += 4) { c.beginPath(); c.moveTo(i, 4); c.lineTo(i, 12); c.stroke(); }
+  });
+  drawTexture(ctx, TEX.BARREL_TOP, c => {
+    fillNoisy(c, 120, 82, 44, 16);
+    c.strokeStyle = 'rgba(70,44,20,0.7)';
+    c.beginPath(); c.arc(8, 8, 6, 0, Math.PI * 2); c.stroke();
+    c.beginPath(); c.moveTo(8, 2); c.lineTo(8, 14); c.stroke();
+    c.beginPath(); c.moveTo(2, 8); c.lineTo(14, 8); c.stroke();
+  });
+  // 物品展示框：木框 + 小汉堡
+  drawTexture(ctx, TEX.ITEM_FRAME, c => {
+    c.clearRect(0, 0, 16, 16);
+    c.fillStyle = '#7a532c';
+    c.fillRect(1, 1, 14, 2); c.fillRect(1, 13, 14, 2);
+    c.fillRect(1, 1, 2, 14); c.fillRect(13, 1, 2, 14);
+    c.fillStyle = '#f4e8d0'; c.fillRect(3, 3, 10, 10);
+    // 迷你汉堡
+    c.fillStyle = '#e0a450'; c.fillRect(5, 5, 6, 2);   // 上面包
+    c.fillStyle = '#5a8f3a'; c.fillRect(5, 7, 6, 1);   // 生菜
+    c.fillStyle = '#b5403a'; c.fillRect(5, 8, 6, 1);   // 肉饼
+    c.fillStyle = '#e0a450'; c.fillRect(5, 9, 6, 2);   // 下面包
+  });
+  // 杜鹃叶：嫩绿带小花
+  drawTexture(ctx, TEX.AZALEA_LEAVES, c => {
+    fillNoisy(c, 96, 160, 84, 30);
+    c.fillStyle = '#f2a7c6';
+    [[4,5],[10,3],[12,10],[6,11]].forEach(([x,y]) => { c.fillRect(x, y, 1, 1); c.fillRect(x+1, y, 1, 1); });
+  });
+  // 甜浆果丛（十字形）
+  drawTexture(ctx, TEX.SWEET_BERRY, c => {
+    c.clearRect(0, 0, 16, 16);
+    c.fillStyle = '#4e7d3a';
+    c.fillRect(6, 4, 4, 11); c.fillRect(4, 7, 8, 6);
+    c.fillStyle = '#d83a4a';
+    c.fillRect(5, 6, 2, 2); c.fillRect(9, 8, 2, 2); c.fillRect(6, 11, 2, 2); c.fillRect(10, 12, 2, 2);
+  });
+  // 苔藓块
+  drawTexture(ctx, TEX.MOSS_BLOCK, c => {
+    fillNoisy(c, 96, 140, 70, 26);
+    c.fillStyle = '#6e9e4e';
+    for (let i = 0; i < 10; i++) { const x = (hash(i, 2) * 14) | 0, y = (hash(i, 7) * 14) | 0; c.fillRect(x, y, 2, 1); }
+  });
+  // 汉堡方块
+  drawTexture(ctx, TEX.BURGER, c => {
+    fillNoisy(c, 224, 164, 80, 10);                 // 面包
+    c.fillStyle = '#f0c878'; c.fillRect(0, 0, 16, 2); c.fillRect(0, 14, 16, 2);
+    c.fillStyle = '#5a9e3c'; c.fillRect(0, 5, 16, 2);  // 生菜
+    c.fillStyle = '#b5403a'; c.fillRect(0, 7, 16, 3);  // 番茄/肉饼
+    c.fillStyle = '#f0d878'; c.fillRect(0, 10, 16, 1); // 芝士
+    c.fillStyle = '#e0a450';
+    for (let i = 0; i < 6; i++) { c.fillRect((hash(i,3)*14)|0, (hash(i,9)*2)|0, 1, 1); }
+  });
+  // 薯条方块
+  drawTexture(ctx, TEX.FRIES, c => {
+    fillNoisy(c, 232, 200, 90, 10);   // 纸盒
+    c.fillStyle = '#e8503a'; c.fillRect(0, 12, 16, 4); c.fillRect(0, 0, 2, 16); c.fillRect(14, 0, 2, 16);
+    c.fillStyle = '#f4d060';          // 薯条
+    [3,6,9,12].forEach(x => { c.fillRect(x, 2, 2, 10); c.fillStyle = '#e0b840'; c.fillRect(x+1, 2, 1, 10); c.fillStyle = '#f4d060'; });
+  });
+  // 糖块
+  drawTexture(ctx, TEX.SUGAR, c => {
+    fillNoisy(c, 250, 250, 252, 6);
+    c.strokeStyle = 'rgba(200,205,215,0.8)';
+    c.strokeRect(0.5, 0.5, 15, 15); c.beginPath(); c.moveTo(0, 8); c.lineTo(16, 8); c.moveTo(8, 0); c.lineTo(8, 16); c.stroke();
+  });
+  // 蜂蜜块
+  drawTexture(ctx, TEX.HONEY_BLOCK, c => {
+    fillNoisy(c, 232, 176, 56, 12);
+    c.fillStyle = 'rgba(255,230,150,0.5)'; c.fillRect(2, 2, 5, 5);
+    c.fillStyle = '#c98f24'; c.fillRect(0, 7, 16, 1); c.fillRect(7, 0, 1, 16);
+  });
+  // 蜜脾块
+  drawTexture(ctx, TEX.HONEYCOMB, c => {
+    fillNoisy(c, 226, 160, 60, 12);
+    c.strokeStyle = '#b57a20';
+    for (let y = 1; y < 16; y += 5) for (let x = 1; x < 16; x += 5) {
+      c.beginPath(); c.arc(x + 2, y + 2, 2, 0, Math.PI * 2); c.stroke();
+    }
+  });
+  // 浅粉 / 浅橙陶瓦（外墙）
+  const drawTerracotta = (r, g, b) => (c) => { fillNoisy(c, r, g, b, 16); c.fillStyle = 'rgba(255,255,255,0.18)'; c.fillRect(0, 0, 16, 2); };
+  drawTexture(ctx, TEX.TERRACOTTA_PINK, drawTerracotta(236, 190, 178));
+  drawTexture(ctx, TEX.TERRACOTTA_ORANGE, drawTerracotta(238, 196, 150));
+
   return canvas;
 }
 
@@ -1193,6 +1479,98 @@ export function getBlockColor(type) {
     [BlockType.JUNGLE_LEAVES]: '#2d7a1e',
     [BlockType.BRICK]: '#aa503c',
     [BlockType.PUMPKIN]: '#dc8c1e',
+    // 植物
+    [BlockType.TALL_GRASS]: '#6aa84a',
+    [BlockType.FLOWER_RED]: '#e04050',
+    [BlockType.FLOWER_YELLOW]: '#f0d040',
+    [BlockType.FLOWER_WHITE]: '#f0f0e8',
+    [BlockType.MUSHROOM_RED]: '#d84030',
+    [BlockType.MUSHROOM_BROWN]: '#8a5a30',
+    [BlockType.DEAD_BUSH]: '#9a7a40',
+    // 木材/建材
+    [BlockType.CHERRY_WOOD]: '#c07888',
+    [BlockType.CHERRY_LEAVES]: '#f29ec4',
+    [BlockType.SPRUCE_WOOD]: '#5a3f28',
+    [BlockType.SPRUCE_LEAVES]: '#35594a',
+    [BlockType.ACACIA_WOOD]: '#a86a44',
+    [BlockType.ACACIA_LEAVES]: '#5a7a3a',
+    [BlockType.DARK_OAK_WOOD]: '#44321f',
+    [BlockType.DARK_OAK_LEAVES]: '#2f4a2a',
+    [BlockType.GRANITE]: '#b07a6e',
+    [BlockType.DIORITE]: '#dcd6d2',
+    [BlockType.ANDESITE]: '#8f8f8a',
+    [BlockType.MOSSY_COBBLE]: '#6a7a52',
+    [BlockType.OBSIDIAN]: '#241a34',
+    [BlockType.BEDROCK]: '#3a3a3a',
+    [BlockType.CLAY]: '#9aa6b8',
+    [BlockType.BOOKSHELF]: '#c09a5a',
+    [BlockType.CRAFTING_TABLE]: '#9a6e3a',
+    [BlockType.FURNACE]: '#7a7a82',
+    [BlockType.LAPIS_ORE]: '#2a5a9e',
+    [BlockType.REDSTONE_ORE]: '#b02a2a',
+    [BlockType.EMERALD_ORE]: '#30b870',
+    [BlockType.GLOWSTONE]: '#f0d060',
+    [BlockType.NETHERRACK]: '#8a3a3a',
+    [BlockType.SOUL_SAND]: '#6a5240',
+    [BlockType.END_STONE]: '#dcd8b0',
+    [BlockType.PURPUR]: '#a87aa8',
+    [BlockType.TERRACOTTA]: '#a06048',
+    [BlockType.PACKED_ICE]: '#9ac8ec',
+    [BlockType.PODZOL]: '#6a4a28',
+    [BlockType.RED_SAND]: '#c87850',
+    [BlockType.RED_SANDSTONE]: '#c88a5a',
+    [BlockType.PRISMARINE]: '#4a8a78',
+    [BlockType.SEA_LANTERN]: '#bfe0e0',
+    [BlockType.BONE_BLOCK]: '#e8e4d0',
+    [BlockType.HAY_BLOCK]: '#c8a838',
+    [BlockType.MELON]: '#5a9e3a',
+    // 家具/生活用品
+    [BlockType.BED_RED]: '#d03a3a',
+    [BlockType.CHEST]: '#9a6e34',
+    [BlockType.LADDER]: '#b08850',
+    [BlockType.DOOR]: '#9a6e3a',
+    [BlockType.LANTERN]: '#e8a83c',
+    [BlockType.PAINTING]: '#c8a050',
+    [BlockType.FLOWER_POT]: '#b06a44',
+    [BlockType.BED_BLUE]: '#3a6ad0',
+    [BlockType.BED_GREEN]: '#46a858',
+    [BlockType.BED_YELLOW]: '#e8d040',
+    [BlockType.TABLE_WOOD]: '#b48c50',
+    [BlockType.CHAIR_WOOD]: '#a07a44',
+    [BlockType.SOFA_RED]: '#d04050',
+    [BlockType.CLOCK_BLOCK]: '#e8c860',
+    [BlockType.TORCH]: '#f0a83c',
+    [BlockType.FENCE]: '#a07a44',
+    // 新照明
+    [BlockType.CANDLE_PINK]: '#f49cc8',
+    [BlockType.CANDLE_BLUE]: '#7ab0f0',
+    [BlockType.CANDLE_YELLOW]: '#f2d860',
+    [BlockType.REDSTONE_LAMP]: '#e8c048',
+    // 新透光
+    [BlockType.GLASS_PINK]: '#f6b8d8',
+    [BlockType.GLASS_BLUE]: '#a8d0f5',
+    [BlockType.GLASS_YELLOW]: '#f8e8a0',
+    [BlockType.GLASS_PANE]: '#cde6f5',
+    // 新家具
+    [BlockType.SLAB]: '#b48c50',
+    [BlockType.TRAPDOOR]: '#a87a48',
+    [BlockType.LECTERN]: '#8a5a30',
+    [BlockType.CARTOGRAPHY]: '#7a5a34',
+    [BlockType.LOOM]: '#9a7040',
+    [BlockType.BARREL]: '#8a5a2e',
+    [BlockType.ITEM_FRAME]: '#7a5230',
+    // 新装饰
+    [BlockType.AZALEA_LEAVES]: '#5f9e48',
+    [BlockType.SWEET_BERRY]: '#c83038',
+    [BlockType.MOSS_BLOCK]: '#6f8a44',
+    // 甜品主题
+    [BlockType.BURGER]: '#c07838',
+    [BlockType.FRIES]: '#e8b020',
+    [BlockType.SUGAR]: '#f6f4ec',
+    [BlockType.HONEY_BLOCK]: '#e8a820',
+    [BlockType.HONEYCOMB]: '#e0941e',
+    [BlockType.TERRACOTTA_PINK]: '#f0a8b8',
+    [BlockType.TERRACOTTA_ORANGE]: '#f0a060',
   };
   return colors[type] || '#ff00ff';
 }
@@ -1254,9 +1632,12 @@ export class Chunk {
     this.cx = cx;
     this.cz = cz;
     this.blocks = new Uint8Array(CHUNK_SIZE * CHUNK_HEIGHT * CHUNK_SIZE);
+    // 家具朝向（0=南+z 1=西-x 2=北-z 3=东+x），0 为默认
+    this.furnDir = new Uint8Array(CHUNK_SIZE * CHUNK_HEIGHT * CHUNK_SIZE);
     this.mesh = null;
     this.waterMesh = null;
     this.crossMesh = null;
+    this.furnitureMesh = null;
     this.dirty = true;
   }
 
@@ -1265,13 +1646,21 @@ export class Chunk {
     return this.blocks[lx + lz * CHUNK_SIZE + ly * CHUNK_SIZE * CHUNK_SIZE];
   }
 
-  setBlock(lx, ly, lz, type) {
+  setBlock(lx, ly, lz, type, dir = -1) {
     if (lx < 0 || lx >= CHUNK_SIZE || lz < 0 || lz >= CHUNK_SIZE || ly < 0 || ly >= CHUNK_HEIGHT) return;
-    this.blocks[lx + lz * CHUNK_SIZE + ly * CHUNK_SIZE * CHUNK_SIZE] = type;
+    const i = lx + lz * CHUNK_SIZE + ly * CHUNK_SIZE * CHUNK_SIZE;
+    this.blocks[i] = type;
+    if (dir >= 0) this.furnDir[i] = dir & 3;
     this.dirty = true;
   }
 
-  buildMesh(getWorldBlock, material, waterMaterial, crossMaterial) {
+  /** 取家具朝向（0..3） */
+  getFurnDir(lx, ly, lz) {
+    if (lx < 0 || lx >= CHUNK_SIZE || lz < 0 || lz >= CHUNK_SIZE || ly < 0 || ly >= CHUNK_HEIGHT) return 0;
+    return this.furnDir[lx + lz * CHUNK_SIZE + ly * CHUNK_SIZE * CHUNK_SIZE];
+  }
+
+  buildMesh(getWorldBlock, material, waterMaterial, crossMaterial, glassMaterial) {
     let hasSolid = false;
     for (let i = 0; i < this.blocks.length; i++) {
       if (this.blocks[i] !== 0) { hasSolid = true; break; }
@@ -1288,6 +1677,9 @@ export class Chunk {
     const sPos = [], sNorm = [], sUv = [], sIdx = [], sCol = []; let sVc = 0;
     const wPos = [], wNorm = [], wUv = [], wIdx = []; let wVc = 0;
     const cPos = [], cNorm = [], cUv = [], cIdx = []; let cVc = 0;
+    const gPos = [], gNorm = [], gUv = [], gIdx = [], gCol = []; let gVc = 0;
+    const isGlassBlock = (t) => t === BlockType.GLASS || t === BlockType.GLASS_PINK
+      || t === BlockType.GLASS_BLUE || t === BlockType.GLASS_YELLOW || t === BlockType.GLASS_PANE;
 
     const getNeighbor = (lx, ly, lz) => {
       if (lx >= 0 && lx < CHUNK_SIZE && lz >= 0 && lz < CHUNK_SIZE && ly >= 0 && ly < CHUNK_HEIGHT)
@@ -1332,6 +1724,8 @@ export class Chunk {
         for (let lx = 0; lx < CHUNK_SIZE; lx++) {
           const bt = this.getBlock(lx, ly, lz);
           if (bt === BlockType.AIR) continue;
+          // 家具方块不生成完整立方体块面，改由 furniture 微模型渲染
+          if (isFurniture(bt)) continue;
           const texMap = BLOCK_TEXTURES[bt];
           if (!texMap) continue;
 
@@ -1364,30 +1758,31 @@ export class Chunk {
           }
 
           const isWater = bt === BlockType.WATER;
-          const positions = isWater ? wPos : sPos;
-          const normals = isWater ? wNorm : sNorm;
-          const uvs = isWater ? wUv : sUv;
-          const indices = isWater ? wIdx : sIdx;
-          let vertexCount = isWater ? wVc : sVc;
+          const isGlass = isGlassBlock(bt);
+          const useBucket = isWater ? 'w' : (isGlass ? 'g' : 's');
+          const positions = useBucket === 'w' ? wPos : (useBucket === 'g' ? gPos : sPos);
+          const normals = useBucket === 'w' ? wNorm : (useBucket === 'g' ? gNorm : sNorm);
+          const uvs = useBucket === 'w' ? wUv : (useBucket === 'g' ? gUv : sUv);
+          const indices = useBucket === 'w' ? wIdx : (useBucket === 'g' ? gIdx : sIdx);
+          let vertexCount = useBucket === 'w' ? wVc : (useBucket === 'g' ? gVc : sVc);
 
           for (const face of FACES) {
-            const nx = lx + face.dir[0], ny = ly + face.dir[1], nz = lz + face.dir[2];
-            const neighbor = getNeighbor(nx, ny, nz);
+            const neighbor = getNeighbor(lx + face.dir[0], ly + face.dir[1], lz + face.dir[2]);
 
             if (isWater) {
               if (neighbor !== BlockType.AIR) continue;
             } else {
               if (!isTransparent(neighbor)) continue;
-              // 玻璃之间不渲染内部面
-              if (bt === BlockType.GLASS && neighbor === BlockType.GLASS) continue;
+              // 同类玻璃之间不渲染内部面
+              if (isGlassBlock(bt) && isGlassBlock(neighbor)) continue;
             }
 
             const texIdx = texMap[face.face];
             const { u0, v0, u1, v1 } = getTexUV(texIdx);
 
-            // 环境光遮蔽：solid 面逐顶点算柔和角落阴影（水/植物不做）
+            // 环境光遮蔽：solid 面逐顶点算柔和角落阴影（水/玻璃/植物不做）
             let ao = null;
-            if (!isWater) ao = vertexAO(lx, ly, lz, face);
+            if (!isWater && !isGlass) ao = vertexAO(lx, ly, lz, face);
 
             for (let ci = 0; ci < 4; ci++) {
               const corner = face.corners[ci];
@@ -1395,14 +1790,14 @@ export class Chunk {
               normals.push(face.dir[0], face.dir[1], face.dir[2]);
               uvs.push(u0 + corner.uv[0] * (u1 - u0), v0 + corner.uv[1] * (v1 - v0));
               if (!isWater) {
-                const a = ao[ci];
-                sCol.push(a, a, a);
+                const a = ao ? ao[ci] : 1;
+                if (isGlass) gCol.push(a, a, a); else sCol.push(a, a, a);
               }
             }
             indices.push(vertexCount, vertexCount + 1, vertexCount + 2, vertexCount, vertexCount + 2, vertexCount + 3);
             vertexCount += 4;
           }
-          if (isWater) wVc = vertexCount; else sVc = vertexCount;
+          if (isWater) wVc = vertexCount; else if (isGlass) gVc = vertexCount; else sVc = vertexCount;
         }
       }
     }
@@ -1443,11 +1838,24 @@ export class Chunk {
       this.crossMesh.position.set(wx0, 0, wz0);
     }
 
+    if (gPos.length > 0 && glassMaterial) {
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute('position', new THREE.Float32BufferAttribute(gPos, 3));
+      geo.setAttribute('normal', new THREE.Float32BufferAttribute(gNorm, 3));
+      geo.setAttribute('uv', new THREE.Float32BufferAttribute(gUv, 2));
+      geo.setAttribute('color', new THREE.Float32BufferAttribute(gCol, 3));
+      geo.setIndex(gIdx);
+      geo.computeBoundingSphere();
+      this.glassMesh = new THREE.Mesh(geo, glassMaterial);
+      this.glassMesh.position.set(wx0, 0, wz0);
+      this.glassMesh.renderOrder = 2;
+    }
+
     this.dirty = false;
   }
 
   _disposeMesh() {
-    for (const m of [this.mesh, this.waterMesh, this.crossMesh]) {
+    for (const m of [this.mesh, this.waterMesh, this.crossMesh, this.glassMesh]) {
       if (m) {
         m.geometry.dispose();
         if (m.parent) m.parent.remove(m);
@@ -1456,6 +1864,7 @@ export class Chunk {
     this.mesh = null;
     this.waterMesh = null;
     this.crossMesh = null;
+    this.glassMesh = null;
   }
 
   dispose() { this._disposeMesh(); }
@@ -1525,6 +1934,9 @@ export class World {
     this.continentNoise = new SimplexNoise(seed + 9999);
     this.cherryNoise = new SimplexNoise(seed + 4242);
     this.oreNoise = new SimplexNoise(seed + 31337);
+    // 山地台地噪声：把山坡量化成一块块开阔平坦的平台（方便小朋友在山上搭建）
+    this.terraceNoise = new SimplexNoise(seed + 20240);
+    this.flatNoise = new SimplexNoise(seed + 8881);
     this.chunks = new Map();
     this.material = null;
     this.crossMaterial = null;
@@ -1549,8 +1961,8 @@ export class World {
     return [lx, y, lz];
   }
 
-  /** 记录一次玩家方块改动 */
-  _recordEdit(wx, wy, wz, type) {
+  /** 记录一次玩家方块改动（dir：家具朝向 0..3，可选） */
+  _recordEdit(wx, wy, wz, type, dir = -1) {
     if (!this._trackEdits || wy < 0 || wy >= CHUNK_HEIGHT) return;
     const cx = Math.floor(wx / CHUNK_SIZE), cz = Math.floor(wz / CHUNK_SIZE);
     const lx = ((wx % CHUNK_SIZE) + CHUNK_SIZE) % CHUNK_SIZE;
@@ -1560,16 +1972,21 @@ export class World {
     const list = this.edits.get(key);
     const packed = World._packLocal(lx, wy, lz);
     const idx = list.findIndex((e) => e[0] === packed);
-    if (idx >= 0) list[idx][1] = type; else list.push([packed, type]);
+    if (idx >= 0) {
+      list[idx][1] = type;
+      if (dir >= 0) list[idx][2] = dir & 3;
+    } else {
+      list.push(dir >= 0 ? [packed, type, dir & 3] : [packed, type]);
+    }
   }
 
   /** 区块生成完地形/生物群系后，回放玩家在该区块的历史改动 */
   applyEdits(chunk) {
     const list = this.edits.get(this.chunkKey(chunk.cx, chunk.cz));
     if (!list) return;
-    for (const [packed, type] of list) {
+    for (const [packed, type, dir] of list) {
       const [lx, y, lz] = World._unpackLocal(packed);
-      chunk.setBlock(lx, y, lz, type);
+      chunk.setBlock(lx, y, lz, type, typeof dir === 'number' ? dir : -1);
     }
   }
 
@@ -1585,7 +2002,7 @@ export class World {
     this.edits.clear();
     if (!data) return;
     for (const key of Object.keys(data)) {
-      this.edits.set(key, data[key].map((e) => [e[0], e[1]]));
+      this.edits.set(key, data[key].map((e) => (typeof e[2] === 'number' ? [e[0], e[1], e[2]] : [e[0], e[1]])));
     }
   }
 
@@ -1603,6 +2020,11 @@ export class World {
     this.crossMaterial = new THREE.MeshLambertMaterial({
       map: texture, side: THREE.DoubleSide, transparent: true, alphaTest: 0.4, depthWrite: false,
     });
+    // 染色玻璃/玻璃板：半透明、彩色边框贴图，能透进光、看到窗外
+    this.glassMaterial = new THREE.MeshLambertMaterial({
+      map: texture, side: THREE.DoubleSide, transparent: true, depthWrite: false,
+      vertexColors: true, alphaTest: 0.02,
+    });
   }
 
   chunkKey(cx, cz) { return `${cx},${cz}`; }
@@ -1617,15 +2039,15 @@ export class World {
     return chunk.getBlock(lx, wy, lz);
   }
 
-  setBlock(wx, wy, wz, type) {
+  setBlock(wx, wy, wz, type, dir = -1) {
     if (wy < 0 || wy >= CHUNK_HEIGHT) return;
     const cx = Math.floor(wx / CHUNK_SIZE), cz = Math.floor(wz / CHUNK_SIZE);
     const chunk = this.chunks.get(this.chunkKey(cx, cz));
     if (!chunk) return;
     const lx = ((wx % CHUNK_SIZE) + CHUNK_SIZE) % CHUNK_SIZE;
     const lz = ((wz % CHUNK_SIZE) + CHUNK_SIZE) % CHUNK_SIZE;
-    chunk.setBlock(lx, wy, lz, type);
-    this._recordEdit(wx, wy, wz, type);
+    chunk.setBlock(lx, wy, lz, type, dir);
+    this._recordEdit(wx, wy, wz, type, dir);
     if (this.onPlayerEdit) this.onPlayerEdit();
     this._dirtyPriority.add(this.chunkKey(cx, cz));
     if (lx === 0) this._markDirty(cx - 1, cz);
@@ -1635,22 +2057,82 @@ export class World {
   }
 
   /**
-   * 世界生成 / 装饰物放置：写入方块但不计入"玩家改动"存档。
+   * 远程玩家（多人联机）改动：写入方块并重建网格/家具，但不计入本地玩家存档。
+   * 若区块尚未加载则记入 _remotePending，待区块生成后自动应用。
+   */
+  setBlockRemote(wx, wy, wz, type, dir = -1) {
+    if (wy < 0 || wy >= CHUNK_HEIGHT) return;
+    const cx = Math.floor(wx / CHUNK_SIZE), cz = Math.floor(wz / CHUNK_SIZE);
+    const chunk = this.chunks.get(this.chunkKey(cx, cz));
+    if (!chunk) {
+      if (!this._remotePending) this._remotePending = new Map();
+      this._remotePending.set(wx + ',' + wy + ',' + wz, { wx, wy, wz, type, dir });
+      return;
+    }
+    this._writeRemote(chunk, cx, cz, wx, wy, wz, type, dir);
+  }
+
+  // 区块首次生成后：把挂起的远程共建方块补到该区块
+  _applyPendingRemote(chunk) {
+    if (!this._remotePending || this._remotePending.size === 0) return;
+    const x0 = chunk.cx * CHUNK_SIZE, z0 = chunk.cz * CHUNK_SIZE;
+    const drop = [];
+    for (const [k, e] of this._remotePending) {
+      if (e.wx >= x0 && e.wx < x0 + CHUNK_SIZE && e.wz >= z0 && e.wz < z0 + CHUNK_SIZE) {
+        const lx = e.wx - x0, lz = e.wz - z0;
+        chunk.setBlock(lx, e.wy, lz, e.type, e.dir);
+        drop.push(k);
+      }
+    }
+    for (const k of drop) this._remotePending.delete(k);
+  }
+
+  _writeRemote(chunk, cx, cz, wx, wy, wz, type, dir) {
+    const lx = ((wx % CHUNK_SIZE) + CHUNK_SIZE) % CHUNK_SIZE;
+    const lz = ((wz % CHUNK_SIZE) + CHUNK_SIZE) % CHUNK_SIZE;
+    chunk.setBlock(lx, wy, lz, type, dir);
+    this._dirtyPriority.add(this.chunkKey(cx, cz));
+    if (lx === 0) this._markDirty(cx - 1, cz);
+    if (lx === CHUNK_SIZE - 1) this._markDirty(cx + 1, cz);
+    if (lz === 0) this._markDirty(cx, cz - 1);
+    if (lz === CHUNK_SIZE - 1) this._markDirty(cx, cz + 1);
+  }
+  /**
+   * 系统生成用（世界装饰/建筑）：写入方块并重建网格，但不记录到玩家存档。
    * 用于出生点美化、亭台楼阁等系统生成结构。
    */
-  setBlockGen(wx, wy, wz, type) {
+  setBlockGen(wx, wy, wz, type, dir = -1) {
     if (wy < 0 || wy >= CHUNK_HEIGHT) return;
     const cx = Math.floor(wx / CHUNK_SIZE), cz = Math.floor(wz / CHUNK_SIZE);
     const chunk = this.chunks.get(this.chunkKey(cx, cz));
     if (!chunk) return;
     const lx = ((wx % CHUNK_SIZE) + CHUNK_SIZE) % CHUNK_SIZE;
     const lz = ((wz % CHUNK_SIZE) + CHUNK_SIZE) % CHUNK_SIZE;
-    chunk.setBlock(lx, wy, lz, type);
+    chunk.setBlock(lx, wy, lz, type, dir);
     this._dirtyPriority.add(this.chunkKey(cx, cz));
     if (lx === 0) this._markDirty(cx - 1, cz);
     if (lx === CHUNK_SIZE - 1) this._markDirty(cx + 1, cz);
     if (lz === 0) this._markDirty(cx, cz - 1);
     if (lz === CHUNK_SIZE - 1) this._markDirty(cx, cz + 1);
+  }
+
+  /**
+   * 由玩家视角 yaw 计算家具朝向 dir：家具正面(靠背/床头)朝向玩家。
+   * 约定：0=南(+z,玩家在 -z 朝北看) 1=西(-x) 2=北(-z) 3=东(+x)
+   * 游戏中 forward=(-sin yaw,0,-cos yaw)。
+   */
+  static yawToFurnDir(yaw) {
+    // 玩家面朝方向
+    const fx = -Math.sin(yaw), fz = -Math.cos(yaw);
+    // 家具正面要朝向玩家，即与玩家视线相反；取主导轴
+    if (Math.abs(fx) > Math.abs(fz)) return fx > 0 ? 1 : 3; // 面朝+x→家具正面朝-x=西(1)；面朝-x→东(3)
+    return fz > 0 ? 2 : 0; // 面朝+z(南)→家具正面朝北(2)；面朝-z(北)→朝南(0)
+  }
+
+  /** 朝向 → 绕 Y 轴旋转角度（弧度）。模型"正面/靠背"默认建在 +z 面。 */
+  static furnDirRotY(dir) {
+    // 0 正面朝+z（默认）；1 朝-x → 旋转 -90°；2 朝-z → 180°；3 朝+x → +90°
+    return [0, -Math.PI / 2, Math.PI, Math.PI / 2][dir & 3];
   }
 
   _markDirty(cx, cz) {
@@ -1701,22 +2183,61 @@ export class World {
     let h;
     switch (biome) {
       case Biome.OCEAN: h = base * 14 + SEA_LEVEL - 12; break;
-      case Biome.PLAINS: h = base * 12 + SEA_LEVEL + 2; break;
-      case Biome.DESERT: h = base * 8 + SEA_LEVEL + 1; break;
+      case Biome.PLAINS: h = this._gentleFlatten(wx, wz, base * 12 + SEA_LEVEL + 2); break;
+      case Biome.DESERT: h = this._gentleFlatten(wx, wz, base * 8 + SEA_LEVEL + 1); break;
       case Biome.JUNGLE: h = base * 14 + SEA_LEVEL + 3; break;
       case Biome.SNOW: h = base * 16 + SEA_LEVEL + 2; break;
-      case Biome.SAVANNA: h = base * 10 + SEA_LEVEL + 2; break;
-      case Biome.MOUNTAINS: h = base * 32 + SEA_LEVEL + 4; break;
-      case Biome.CHERRY: h = base * 10 + SEA_LEVEL + 4; break;
-      case Biome.TAIGA: h = base * 14 + SEA_LEVEL + 3; break;
+      case Biome.SAVANNA: h = this._gentleFlatten(wx, wz, base * 10 + SEA_LEVEL + 2); break;
+      case Biome.MOUNTAINS: h = this._mountainHeight(wx, wz, base); break;
+      case Biome.CHERRY: h = this._gentleFlatten(wx, wz, base * 10 + SEA_LEVEL + 4); break;
+      case Biome.TAIGA: h = this._gentleFlatten(wx, wz, base * 14 + SEA_LEVEL + 3); break;
       case Biome.SWAMP: h = base * 4 + SEA_LEVEL - 1; break;
       case Biome.MESA: h = base * 18 + SEA_LEVEL + 4; break;
-      default: h = base * 12 + SEA_LEVEL + 2;
+      default: h = this._gentleFlatten(wx, wz, base * 12 + SEA_LEVEL + 2);
     }
     return Math.max(1, Math.min(CHUNK_HEIGHT - 8, Math.floor(h)));
   }
 
-  // ────────────── WELCOME 文字立墙（5×7 点阵） ──────────────
+  /**
+   * 缓坡群系找平：用低频 flat 噪声圈出开阔平缓地块，
+   * 在地块内部把高度差压平（量化到 2 格档），边缘平滑过渡，
+   * 让平原/草原/针叶林/沙漠上也有大片可直接搭建的平坦草地。
+   */
+  _gentleFlatten(wx, wz, raw) {
+    const f = (this.flatNoise.noise2D(wx * 0.006, wz * 0.006) + 1) * 0.5;
+    let w = (f - 0.62) / 0.26; // 只有较高值区域才找平
+    w = Math.max(0, Math.min(1, w));
+    if (w <= 0.001) return raw;
+    const flat = Math.round(raw / 2) * 2;
+    return raw * (1 - w) + flat * w;
+  }
+
+  /**
+   * 山地高度：在连续起伏的山体上叠加"台地（terrace）"，
+   * 让山腰、山顶自然形成一片片开阔平坦的平台，方便小朋友搭建。
+   * 思路：
+   *  - raw：原本连续起伏的山高；
+   *  - plateau：一层很低频的大块噪声，圈出"高原/平地"范围（越靠平台中心越平）；
+   *  - 在平台中心把高度量化到固定档位（每档 STEP 格），形成水平台面；
+   *  - 平台边缘用平滑权重过渡回坡面，避免出现一刀切的竖壁。
+   */
+  _mountainHeight(wx, wz, base) {
+    const raw = base * 32 + SEA_LEVEL + 4;
+    // 台地掩膜：超低频大片区域（中心=平台，边缘=坡）
+    const mask = (this.terraceNoise.noise2D(wx * 0.0032, wz * 0.0032) + 1) * 0.5;
+    // 台地层高度：波长更宽的超低频噪声，让一大片区域取同一高度档
+    const levelN = (this.flatNoise.noise2D(wx * 0.0022 + 300, wz * 0.0022 + 300) + 1) * 0.5;
+    // 平台权重：中心区域权重=1（完全水平），仅在很窄的边缘带过渡
+    let w = (mask - 0.46) / 0.16;
+    w = Math.max(0, Math.min(1, w));
+    w = w * w * (3 - 2 * w);
+    if (w <= 0.001) return Math.floor(raw);
+    // 平台目标高度：量化成 6 格一档；levelN 变化极慢 → 整片平台等高
+    const level = SEA_LEVEL + 8 + Math.round(levelN * 4.2) * 6;
+    const terrace = Math.max(SEA_LEVEL + 4, Math.min(CHUNK_HEIGHT - 10, level));
+    const h = raw * (1 - w) + terrace * w;
+    return Math.floor(h);
+  }
   static FONT = {
     W: [[1,0,0,0,1],[1,0,0,0,1],[1,0,0,0,1],[1,0,1,0,1],[1,0,1,0,1],[1,1,0,1,1],[0,1,0,1,0]],
     E: [[1,1,1,1,1],[1,0,0,0,0],[1,0,0,0,0],[1,1,1,1,0],[1,0,0,0,0],[1,0,0,0,0],[1,1,1,1,1]],
@@ -1833,6 +2354,13 @@ export class World {
 
     // 3) 群系植被与结构
     this._generateBiomeFeatures(chunk);
+
+    // 3.5) 固定结构装饰钩子（如落樱庄园）：对每个新生成的区块回调，跨区块结构
+    //       用 setBlockGen 写入邻接区块（此时邻接区块若未生成会被跳过，因此装饰需
+    //       幂等、且只写当前区块及已存在区块；实际采用"按列判定"的无状态装饰）。
+    if (this.chunkDecorator) {
+      try { this.chunkDecorator(chunk); } catch (e) { /* 装饰失败不阻塞世界生成 */ }
+    }
 
     // 4) 回放玩家历史改动（优先于地形/植被生成结果）
     this.applyEdits(chunk);
@@ -2084,6 +2612,32 @@ export class World {
     for (let ty = 1; ty <= h; ty++) chunk.setBlock(lx, surfaceY + ty, lz, BlockType.CACTUS);
   }
 
+  /** 移除区块的家具微模型 */
+  _removeChunkFurniture(chunk) {
+    if (chunk.furnitureMesh) {
+      if (chunk.furnitureMesh.parent) chunk.furnitureMesh.parent.remove(chunk.furnitureMesh);
+      chunk.furnitureMesh.traverse(o => {
+        if (o.isInstancedMesh || o.isMesh) {
+          if (o.material) o.material.dispose();
+          o.geometry.dispose();
+        }
+      });
+      chunk.furnitureMesh = null;
+    }
+  }
+
+  /** 生成并挂载区块的家具微模型（若有家具方块） */
+  _addChunkFurniture(chunk) {
+    this._removeChunkFurniture(chunk);
+    if (typeof this.furnitureBuilder === 'function') {
+      const g = this.furnitureBuilder(chunk);
+      if (g) {
+        chunk.furnitureMesh = g;
+        this.scene.add(g);
+      }
+    }
+  }
+
   update(playerX, playerZ) {
     const pcx = Math.floor(playerX / CHUNK_SIZE);
     const pcz = Math.floor(playerZ / CHUNK_SIZE);
@@ -2102,6 +2656,8 @@ export class World {
         if (chunk.mesh) this.scene.remove(chunk.mesh);
         if (chunk.waterMesh) this.scene.remove(chunk.waterMesh);
         if (chunk.crossMesh) this.scene.remove(chunk.crossMesh);
+        if (chunk.glassMesh) this.scene.remove(chunk.glassMesh);
+        this._removeChunkFurniture(chunk);
         chunk.dispose();
         this.chunks.delete(key);
       }
@@ -2114,14 +2670,17 @@ export class World {
       if (this.chunks.has(key)) continue;
       const chunk = new Chunk(cx, cz);
       this.generateChunkData(chunk);
+      this._applyPendingRemote(chunk);
       chunk.buildMesh(
         (wx, wy, wz) => this.getBlock(wx, wy, wz),
-        this.material, this.waterMaterial, this.crossMaterial
+        this.material, this.waterMaterial, this.crossMaterial, this.glassMaterial
       );
       this.chunks.set(key, chunk);
       if (chunk.mesh) this.scene.add(chunk.mesh);
       if (chunk.waterMesh) this.scene.add(chunk.waterMesh);
       if (chunk.crossMesh) this.scene.add(chunk.crossMesh);
+      if (chunk.glassMesh) this.scene.add(chunk.glassMesh);
+      this._addChunkFurniture(chunk);
       processed++;
     }
 
@@ -2134,10 +2693,14 @@ export class World {
         if (chunk.mesh) this.scene.remove(chunk.mesh);
         if (chunk.waterMesh) this.scene.remove(chunk.waterMesh);
         if (chunk.crossMesh) this.scene.remove(chunk.crossMesh);
-        chunk.buildMesh((wx, wy, wz) => this.getBlock(wx, wy, wz), this.material, this.waterMaterial, this.crossMaterial);
+        if (chunk.glassMesh) this.scene.remove(chunk.glassMesh);
+        this._removeChunkFurniture(chunk);
+        chunk.buildMesh((wx, wy, wz) => this.getBlock(wx, wy, wz), this.material, this.waterMaterial, this.crossMaterial, this.glassMaterial);
         if (chunk.mesh && !chunk.mesh.parent) this.scene.add(chunk.mesh);
         if (chunk.waterMesh && !chunk.waterMesh.parent) this.scene.add(chunk.waterMesh);
         if (chunk.crossMesh && !chunk.crossMesh.parent) this.scene.add(chunk.crossMesh);
+        if (chunk.glassMesh && !chunk.glassMesh.parent) this.scene.add(chunk.glassMesh);
+        this._addChunkFurniture(chunk);
         rebuilt++;
       }
     }
@@ -2150,10 +2713,14 @@ export class World {
         if (chunk.mesh) this.scene.remove(chunk.mesh);
         if (chunk.waterMesh) this.scene.remove(chunk.waterMesh);
         if (chunk.crossMesh) this.scene.remove(chunk.crossMesh);
-        chunk.buildMesh((wx, wy, wz) => this.getBlock(wx, wy, wz), this.material, this.waterMaterial, this.crossMaterial);
+        if (chunk.glassMesh) this.scene.remove(chunk.glassMesh);
+        this._removeChunkFurniture(chunk);
+        chunk.buildMesh((wx, wy, wz) => this.getBlock(wx, wy, wz), this.material, this.waterMaterial, this.crossMaterial, this.glassMaterial);
         if (chunk.mesh && !chunk.mesh.parent) this.scene.add(chunk.mesh);
         if (chunk.waterMesh && !chunk.waterMesh.parent) this.scene.add(chunk.waterMesh);
         if (chunk.crossMesh && !chunk.crossMesh.parent) this.scene.add(chunk.crossMesh);
+        if (chunk.glassMesh && !chunk.glassMesh.parent) this.scene.add(chunk.glassMesh);
+        this._addChunkFurniture(chunk);
         rebuilt++;
       }
     }
@@ -2165,10 +2732,14 @@ export class World {
           if (chunk.mesh) this.scene.remove(chunk.mesh);
           if (chunk.waterMesh) this.scene.remove(chunk.waterMesh);
           if (chunk.crossMesh) this.scene.remove(chunk.crossMesh);
-          chunk.buildMesh((wx, wy, wz) => this.getBlock(wx, wy, wz), this.material, this.waterMaterial, this.crossMaterial);
+        if (chunk.glassMesh) this.scene.remove(chunk.glassMesh);
+          this._removeChunkFurniture(chunk);
+          chunk.buildMesh((wx, wy, wz) => this.getBlock(wx, wy, wz), this.material, this.waterMaterial, this.crossMaterial, this.glassMaterial);
           if (chunk.mesh && !chunk.mesh.parent) this.scene.add(chunk.mesh);
           if (chunk.waterMesh && !chunk.waterMesh.parent) this.scene.add(chunk.waterMesh);
           if (chunk.crossMesh && !chunk.crossMesh.parent) this.scene.add(chunk.crossMesh);
+        if (chunk.glassMesh && !chunk.glassMesh.parent) this.scene.add(chunk.glassMesh);
+          this._addChunkFurniture(chunk);
           rebuilt++;
         }
       }

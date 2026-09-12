@@ -68,6 +68,13 @@ export class Tutorial {
     this._render();
   }
 
+  /** 快捷键切换：已关闭则重开，已显示则收起；三步任务全部完成后不再重开 */
+  toggle() {
+    if (this.completed) return;
+    if (this._dismissed) this.show();
+    else this.dismiss();
+  }
+
   _buildBubble() {
     const T = this.THREE;
     const cv = document.createElement('canvas');

@@ -8,28 +8,32 @@ import {
   World, Chunk, BlockType, BlockNames, isSolid,
   CHUNK_SIZE, CHUNK_HEIGHT, RENDER_DISTANCE, getBlockColor,
   isMobileDevice, getRenderDistance, getBlockDrop, BiomeNames, Biome,
-} from './voxel.js?v=20260925l';
-import { AnimalManager, Sheep, Rabbit, Horse, Cow, Pig, Chicken, Villager, IronGolem } from './animals.js?v=20260925l';
-import { WeatherSystem, WeatherType, WeatherNames } from './weather.js?v=20260925l';
-import { DayNightCycle } from './daynight.js?v=20260925l';
-import { DropManager } from './drops.js?v=20260925l';
-import { VillageGenerator } from './village.js?v=20260925l';
-import { Inventory } from './inventory.js?v=20260925l';
-import { ExchangeShop } from './exchange.js?v=20260925l';
-import { createHeldModel, createArmModel, ItemNames, getItemIcon, AGENT_ARMS } from './equipment.js?v=20260925l';
-import { StructureGenerator, PLAYER_SPAWN } from './structures.js?v=20260925l';
-import { PlayerCharacter } from './player-character.js?v=20260925l';
-import { SakuraPetals } from './sakura.js?v=20260925l';
-import { BirdManager, ButterflyManager } from './birds.js?v=20260925l';
-import { WindmillBlades } from './windmill.js?v=20260925l';
-import { Fireflies } from './fireflies.js?v=20260925l';
-import { SoundFX } from './audio.js?v=20260925l';
-import { Tutorial } from './tutorial.js?v=20260925l';
+} from './voxel.js?v=20260925aa';
+import { Multiplayer } from './multiplayer.js?v=20260925aa';
+import { isCommunityEnabled } from './config.js?v=20260925aa';
+import { AnimalManager, Sheep, Rabbit, Horse, Cow, Pig, Chicken, Villager, IronGolem } from './animals.js?v=20260925aa';
+import { WeatherSystem, WeatherType, WeatherNames } from './weather.js?v=20260925aa';
+import { DayNightCycle } from './daynight.js?v=20260925aa';
+import { DropManager } from './drops.js?v=20260925aa';
+import { VillageGenerator } from './village.js?v=20260925aa';
+import { Inventory } from './inventory.js?v=20260925aa';
+import { ExchangeShop } from './exchange.js?v=20260925aa';
+import { createHeldModel, createArmModel, ItemNames, getItemIcon, AGENT_ARMS } from './equipment.js?v=20260925aa';
+import { StructureGenerator, PLAYER_SPAWN, SAKURA_ISLAND_X, SAKURA_ISLAND_Z } from './structures.js?v=20260925aa';
+import { PlayerCharacter } from './player-character.js?v=20260925aa';
+import { SakuraPetals } from './sakura.js?v=20260925aa';
+import { BirdManager, ButterflyManager } from './birds.js?v=20260925aa';
+import { WindmillBlades } from './windmill.js?v=20260925aa';
+import { WorldMap } from './world-map.js?v=20260925aa';
+import { Fireflies } from './fireflies.js?v=20260925aa';
+import { SoundFX } from './audio.js?v=20260925aa';
+import { Tutorial } from './tutorial.js?v=20260925aa';
 import {
   loadSave, writeSave, clearSave, hasSave,
   exportSave, importSave,
-} from './save.js?v=20260925l';
-import { Portfolio } from './portfolio.js?v=20260925l';
+} from './save.js?v=20260925aa';
+import { Portfolio } from './portfolio.js?v=20260925aa';
+import { buildFurnitureGroup } from './furniture.js?v=20260925aa';
 
 /* ============================================
    玩家类 - 第一人称角色控制
@@ -44,8 +48,14 @@ class Player {
     this.velocity = new THREE.Vector3(0, 0, 0);
 
     // 视角旋转（欧拉角）
-    this.pitch = 0;   // 上下俯仰
-    this.yaw = 0;     // 左右偏航
+    this.pitch = 0;   // 上下俯仰（第一人称视角）
+    this.yaw = 0;     // 左右偏航（角色身体朝向 / 第一人称视角）
+
+    // 第三人称环绕相机轨道角（独立于角色身体，可 360° 环绕看到正面）
+    this.orbitYaw = 0;
+    this.orbitPitch = 0.18;
+    this.bodyYaw = 0; // 角色模型实际朝向：移动时跟随移动方向，静止时保持
+    this._orbitMode = false; // true=第三人称环绕模式（移动/射线/模型均按轨道角）
 
     // 物理参数
     this.gravity = -25;
@@ -87,17 +97,18 @@ class Player {
     // 限制最大帧间隔，防止穿墙
     dt = Math.min(dt, 0.05);
 
-    // 计算移动方向（基于视角）
+    // 计算移动方向（基于视角）。第三人称用相机轨道角，第一人称用角色 yaw。
+    const viewYaw = this._orbitMode ? this.orbitYaw : this.yaw;
     const forward = new THREE.Vector3(
-      -Math.sin(this.yaw),
+      -Math.sin(viewYaw),
       0,
-      -Math.cos(this.yaw)
+      -Math.cos(viewYaw)
     ).normalize();
 
     const right = new THREE.Vector3(
-      Math.cos(this.yaw),
+      Math.cos(viewYaw),
       0,
-      -Math.sin(this.yaw)
+      -Math.sin(viewYaw)
     ).normalize();
 
     // 根据输入计算目标速度
@@ -109,6 +120,10 @@ class Player {
 
     if (moveDir.lengthSq() > 0) {
       moveDir.normalize();
+      // 第三人称环绕：移动时让角色身体朝向实际前进方向（静止时保持 bodyYaw）
+      if (this._orbitMode) {
+        this.bodyYaw = Math.atan2(-moveDir.x, -moveDir.z);
+      }
     }
 
     // 水平移动
@@ -319,10 +334,14 @@ class Player {
       this.position.y + this.eyeHeight,
       this.position.z
     );
+    // 射线方向：第一人称用角色 yaw/pitch；第三人称用环绕相机轨道角，
+    // 让放置/破坏跟随准星（屏幕中心）看到的方块。
+    const dirYaw = this._orbitMode ? this.orbitYaw : this.yaw;
+    const dirPitch = this._orbitMode ? this.orbitPitch : this.pitch;
     const direction = new THREE.Vector3(
-      -Math.sin(this.yaw) * Math.cos(this.pitch),
-      Math.sin(this.pitch),
-      -Math.cos(this.yaw) * Math.cos(this.pitch)
+      -Math.sin(dirYaw) * Math.cos(dirPitch),
+      Math.sin(dirPitch),
+      -Math.cos(dirYaw) * Math.cos(dirPitch)
     ).normalize();
 
     this.targetBlock = null;
@@ -422,8 +441,11 @@ class Player {
     if (py < 0 || py >= CHUNK_HEIGHT) return false;
     if (this.world.getBlock(px, py, pz) !== BlockType.AIR) return false;
 
-    this.world.setBlock(px, py, pz, this.selectedBlock);
-    if (this.onPlace) this.onPlace();
+    // 家具/可朝向方块：按玩家视角决定朝向（正面朝向玩家）
+    const viewYaw = (typeof this.orbitYaw === 'number' && this._orbitMode) ? this.orbitYaw : this.yaw;
+    const dir = World.yawToFurnDir(viewYaw);
+    this.world.setBlock(px, py, pz, this.selectedBlock, dir);
+    if (this.onPlace) this.onPlace(px, py, pz, this.selectedBlock, dir);
     return true;
   }
 
@@ -436,7 +458,7 @@ class Player {
 
     const blockType = this.world.getBlock(x, y, z);
     this.world.setBlock(x, y, z, BlockType.AIR);
-    if (this.onBreak) this.onBreak();
+    if (this.onBreak) this.onBreak(x, y, z, BlockType.AIR, -1);
 
     // 生成掉落物（由 game 层注入 dropManager）
     const drop = getBlockDrop(blockType);
@@ -685,6 +707,94 @@ class TouchController {
 }
 
 /* ============================================
+   远程玩家（多人联机：别的小特工）
+   ============================================ */
+class RemotePlayer {
+  constructor(scene, THREE, PlayerCharacter, info) {
+    this.THREE = THREE;
+    this.id = info.id;
+    this.target = new THREE.Vector3(info.x, info.y, info.z);
+    this.cur = new THREE.Vector3(info.x, info.y, info.z);
+    this.targetYaw = info.yaw;
+    this.yaw = info.yaw;
+    this.avatar = new PlayerCharacter(scene);
+    this.avatar.setSkin(info.skin || 'burger');
+    this.avatar.setVisible(true);
+    this.avatar.group.visible = true;
+    // 名字标签
+    this.label = this._makeLabel(THREE, info.nickname || '小探险家');
+    scene.add(this.label);
+    this._updateTransform(1);
+  }
+
+  _makeLabel(THREE, name) {
+    const cv = document.createElement('canvas');
+    cv.width = 256; cv.height = 72;
+    const ctx = cv.getContext('2d');
+    ctx.font = 'bold 34px "Microsoft YaHei", sans-serif';
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.lineWidth = 8; ctx.strokeStyle = 'rgba(20,12,4,0.85)';
+    ctx.strokeText(name, 128, 36);
+    ctx.fillStyle = '#ffd9ec';
+    ctx.fillText(name, 128, 36);
+    const tex = new THREE.CanvasTexture(cv);
+    tex.needsUpdate = true;
+    const spr = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false }));
+    spr.scale.set(1.7, 0.48, 1);
+    spr.renderOrder = 999;
+    return spr;
+  }
+
+  updateInfo(info) {
+    this.target.set(info.x, info.y, info.z);
+    this.targetYaw = info.yaw;
+    if (this.avatar && info.skin) {
+      // 皮肤可能中途切换
+      if (this._skin !== info.skin) { this._skin = info.skin; this.avatar.setSkin(info.skin); }
+    }
+  }
+
+  _updateTransform(t) {
+    this.cur.lerp(this.target, t);
+    this.yaw += (this.targetYaw - this.yaw) * Math.min(1, t);
+    // PlayerCharacter 模型正面朝 +Z，组需 rotation.y = yaw + PI
+    this.avatar.group.position.set(this.cur.x, this.cur.y, this.cur.z);
+    this.avatar.group.rotation.y = this.yaw + Math.PI;
+    this.label.position.set(this.cur.x, this.cur.y + 2.1, this.cur.z);
+  }
+
+  update(dt) { this._updateTransform(Math.min(1, dt * 8)); }
+
+  dispose(scene) {
+    scene.remove(this.avatar.group);
+    scene.remove(this.label);
+    if (this.label.material && this.label.material.map) this.label.material.map.dispose();
+    if (this.label.material) this.label.material.dispose();
+  }
+}
+
+class RemotePlayers {
+  constructor(scene, THREE, PlayerCharacter) {
+    this.scene = scene; this.THREE = THREE; this.PC = PlayerCharacter;
+    this.map = new Map();
+  }
+  sync(list) {
+    const seen = new Set();
+    for (const info of list) {
+      seen.add(info.id);
+      let rp = this.map.get(info.id);
+      if (!rp) { rp = new RemotePlayer(this.scene, this.THREE, this.PC, info); this.map.set(info.id, rp); }
+      else rp.updateInfo(info);
+    }
+    for (const [id, rp] of this.map) {
+      if (!seen.has(id)) { rp.dispose(this.scene); this.map.delete(id); }
+    }
+  }
+  update(dt) { for (const rp of this.map.values()) rp.update(dt); }
+  clear() { for (const rp of this.map.values()) rp.dispose(this.scene); this.map.clear(); }
+}
+
+/* ============================================
    游戏主类
    ============================================ */
 class Game {
@@ -751,19 +861,20 @@ class Game {
     this._initEvents();
     this._initInventory();
     this._initSaveUI();
+    this._initMultiplayerUI();
     this._initPortfolio();
 
-    // 设置预览视角：背景正对出生广场的樱花风车房（穿过 WELCOME 拱门可见）
+    // 设置预览视角：出生广场开阔草地，远处尽头是高大气派的樱花风车房（叶片在屋顶上转动）
     this.camera.position.set(0, 30, 30);
-    this.camera.lookAt(0, 30, 13);
+    this.camera.lookAt(0, 36, -18);
 
     // 开始界面保持显示，背后渲染 3D 世界
     this.ui.loadingBar.style.display = 'block';
 
     // 无存档时：出生在固定手工"新手家园"（世界原点），家园半径 30 大平地
     this._isNewHome = (!this.saveData || !this.saveData.player);
-    // 出生区块中心：新世界固定原点（家园中心）；读档则以上次所在位置为中心预生成地形
-    let centerX = 0.5, centerZ = 16.5;
+    // 出生区块中心：新世界固定出生点（开阔广场南端，面朝北端风车房）；读档则以上次所在位置为中心预生成地形
+    let centerX = PLAYER_SPAWN.x, centerZ = PLAYER_SPAWN.z;
     if (this.saveData && this.saveData.player) {
       centerX = this.saveData.player.x;
       centerZ = this.saveData.player.z;
@@ -788,6 +899,15 @@ class Game {
         loadSet.set(`${dx},${dz}`, [dx, dz]);
       }
     }
+    // 樱花风车房（出生广场北端地标）所在区块强制加载，确保第一眼就能看到
+    const wmCx = Math.floor(PLAYER_SPAWN.x / 16);
+    const wmCz = Math.floor(-6 / 16);   // 风车中心 z=-6 → chunk cz=-1
+    for (let dx = -1; dx <= 1; dx++) {
+      for (let dz = -1; dz <= 1; dz++) {
+        const a = wmCx + dx, b = wmCz + dz;
+        loadSet.set(`${a},${b}`, [a, b]);
+      }
+    }
     const chunksToLoad = [...loadSet.values()];
     chunksToLoad.sort((a, b) => {
       // 优先出生点区块，其次原点
@@ -808,6 +928,8 @@ class Game {
           if (chunk.mesh) this.scene.add(chunk.mesh);
           if (chunk.waterMesh) this.scene.add(chunk.waterMesh);
           if (chunk.crossMesh) this.scene.add(chunk.crossMesh);
+          if (chunk.glassMesh) this.scene.add(chunk.glassMesh);
+          this.world._addChunkFurniture(chunk);
         } catch (err) {
           console.error('生成区块失败', cx, cz, err);
         }
@@ -877,9 +999,9 @@ class Game {
     if (this._isNewHome) {
       try {
         const home = this.structures.decorateSpawn();
-        // 装饰写入后，重建家园范围内的区块网格
-        for (let cx = -3; cx <= 3; cx++) {
-          for (let cz = -3; cz <= 3; cz++) {
+        // 装饰写入后，重建家园 + 落樱庄园范围内的区块网格（庄园在出生点东侧远处，需额外覆盖）
+        for (let cx = -3; cx <= 6; cx++) {
+          for (let cz = -4; cz <= 3; cz++) {
             this.world.update(cx * 16 + 8, cz * 16 + 8);
           }
         }
@@ -955,7 +1077,7 @@ class Game {
         const spot = this.structures.ensureWindmillLandmark ? this.structures.ensureWindmillLandmark() : null;
         this.world._trackEdits = prevTrack;
         if (spot) {
-          // 重建风车核心区 + 迎宾道 + 拱门/出生点广场网格（z=13~28 跨 chunk cz 0 与 1）
+          // 重建出生广场 + 风车地标 + WELCOME 木牌网格（风车 z=-18 在 chunk cz=-2，出生点/木牌在 cz=1）
           for (let cx = -2; cx <= 1; cx++) {
             for (let cz = -2; cz <= 1; cz++) this.world.update(cx * 16 + 8, cz * 16 + 8);
           }
@@ -1059,24 +1181,75 @@ class Game {
   }
 
   /** 一键回到出生家园（防迷路/卡住）。传送到出生点并确保站在安全高度。 */
+  /** 桌面端右上角“?”操作说明面板：点击收起/展开 */
+  _initControlsPanel() {
+    const panel = this.ui && this.ui.controlsPanel;
+    if (!panel) return;
+    const trigger = panel.querySelector('#controlsTrigger');
+    if (!trigger) return;
+    const toggle = (ev) => {
+      if (ev) { ev.preventDefault(); ev.stopPropagation(); }
+      panel.classList.toggle('collapsed');
+      try { if (this.sound) this.sound.click(); } catch (e) {}
+    };
+    trigger.addEventListener('click', toggle);
+  }
+
+  /** 世界小地图（M 键 / 手机菜单“地图”） */
+  _initWorldMap() {
+    if (this.worldMap) return;
+    const windmillSpot = (this.structures && this.structures.windmillSpot) || null;
+    this.worldMap = new WorldMap(this.world, {
+      home: { x: PLAYER_SPAWN.x, z: PLAYER_SPAWN.z },
+      windmill: windmillSpot ? { x: windmillSpot.x, z: windmillSpot.z } : null,
+      island: { x: SAKURA_ISLAND_X, z: SAKURA_ISLAND_Z },
+      getPlayer: () => {
+        if (!this.player) return null;
+        return { x: this.player.position.x, z: this.player.position.z, yaw: this.player.yaw };
+      },
+    });
+  }
+
+  _toggleWorldMap() {
+    if (!this.worldMap) {
+      try { this._initWorldMap(); } catch (e) { console.warn('[map] init fail', e); return; }
+    }
+    // 世界生成后再取风车坐标补全（初始化时可能尚未生成）
+    if (this.worldMap && !this.worldMap.windmill && this.structures && this.structures.windmillSpot) {
+      this.worldMap.windmill = { x: this.structures.windmillSpot.x, z: this.structures.windmillSpot.z };
+    }
+    const willOpen = !this.worldMap.open;
+    this.worldMap.toggle();
+    if (willOpen) {
+      // 打开地图：释放鼠标指针，方便点击缩放/关闭
+      try { if (document.pointerLockElement) document.exitPointerLock(); } catch (e) {}
+      if (this.sound) { try { this.sound.click(); } catch (e) {} }
+    }
+  }
+
   teleportHome() {
-    if (!this.started || !this.player) return;
+    if (!this.isRunning || !this.player) return;
     try {
       const x = PLAYER_SPAWN.x;
       const z = PLAYER_SPAWN.z;
       // 取地表高度，确保不会卡在地下或悬空
       let y = PLAYER_SPAWN.y;
       try {
+        // 强制加载出生点区块后再读地表，避免读到未生成区块
+        for (let cx = -1; cx <= 1; cx++) {
+          for (let cz = -1; cz <= 1; cz++) this.world.update(x + cx * 16, z + cz * 16);
+        }
         const surf = this.world.getSurfaceHeight(Math.floor(x), Math.floor(z));
         if (typeof surf === 'number' && surf > 0) y = surf + 2;
       } catch (e) {}
       this.player.position.set(x, y, z);
       this.player.velocity.set(0, 0, 0);
+      this.player.yaw = 0;
+      this.player.pitch = -0.1;
+      this.player.onGround = false;
       if (this.playerChar) this.playerChar.group.position.set(x, y + 0.25, z);
-      // 强制刷新出生点周围区块
-      for (let cx = -1; cx <= 1; cx++) {
-        for (let cz = -1; cz <= 1; cz++) this.world.update(Math.floor(x) + cx * 16, Math.floor(z) + cz * 16);
-      }
+      // 再次强制刷新生点周围区块
+      this.world.update(x, z);
       this._toast('🏠 已回到出生家园');
       if (this.sound) try { this.sound.click(); } catch (e) {}
     } catch (e) {
@@ -1316,6 +1489,10 @@ class Game {
     document.addEventListener('visibilitychange', () => {
       if (document.visibilityState === 'hidden') autoSave();
     });
+    // 离开页面时退出多人房间（presence 自动通知其他人离线）
+    const leaveMp = () => { try { if (this.mp && this.mp.inRoom) this.mp.leave(); } catch (e) {} };
+    window.addEventListener('beforeunload', leaveMp);
+    window.addEventListener('pagehide', leaveMp);
 
     // 开始界面：继续 / 新世界 / 导出 / 导入
     const continueBtn = document.getElementById('continueBtn');
@@ -1374,6 +1551,10 @@ class Game {
     try { this._initStartSteps(); } catch (e) { console.warn('[steps] 初始化失败', e); }
     // 移动端功能菜单（⋯）
     try { if (this.isMobile) this._initMobileMenu(); } catch (e) { console.warn('[mobile-menu] 初始化失败', e); }
+    // 桌面端右上角操作说明：点击 “?” 收起/展开
+    try { this._initControlsPanel(); } catch (e) { console.warn('[controls-panel] 初始化失败', e); }
+    // 世界小地图（M 键 / 地图按钮）
+    try { this._initWorldMap(); } catch (e) { console.warn('[world-map] 初始化失败', e); }
 
     // 游戏内快捷键：Ctrl+S 手动保存
     document.addEventListener('keydown', (e) => {
@@ -1382,6 +1563,90 @@ class Game {
         if (this.world) this.saveNow(true);
       }
     });
+  }
+
+  /** 多人共建面板：昵称 / 建房 / 加入房间码 / 复制房码 */
+  _initMultiplayerUI() {
+    const box = document.getElementById('mpBox');
+    if (!box) return;
+    // 未配置云端时整个面板隐藏，不影响单机
+    if (!this.mp || !isCommunityEnabled() || !window.supabase) { box.style.display = 'none'; return; }
+
+    const nameInput = document.getElementById('mpName');
+    const codeInput = document.getElementById('mpCode');
+    const createBtn = document.getElementById('mpCreate');
+    const joinBtn = document.getElementById('mpJoin');
+    const codeBar = document.getElementById('mpCodeBar');
+    const codeValue = document.getElementById('mpCodeValue');
+    const copyBtn = document.getElementById('mpCopy');
+    const setStatus = (t) => this._onMpStatus(t);
+
+    if (nameInput) {
+      if (this.mp.nickname) nameInput.value = this.mp.nickname;
+      nameInput.addEventListener('input', () => this.mp.setNickname(nameInput.value));
+    }
+    // 房间码输入：大写、只保留字母数字
+    if (codeInput) {
+      codeInput.addEventListener('input', () => { codeInput.value = codeInput.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6); });
+    }
+    // 选角变化时同步给联机皮肤
+    const syncSkin = () => { try { this.mp.setSkin(this._getSelectedChar()); } catch (e) {} };
+    const busy = (on) => { if (createBtn) createBtn.disabled = on; if (joinBtn) joinBtn.disabled = on; };
+
+    const showRoomCode = (code) => {
+      if (codeBar && codeValue) {
+        codeValue.textContent = code;
+        codeBar.style.display = 'flex';
+      }
+    };
+
+    if (createBtn) {
+      createBtn.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        if (nameInput && nameInput.value.trim()) this.mp.setNickname(nameInput.value);
+        if (!this.mp.nickname || this.mp.nickname === '小探险家') {
+          if (nameInput && !nameInput.value.trim()) { setStatus('先给小特工取个昵称，再创建房间哦～'); nameInput.focus(); return; }
+        }
+        syncSkin();
+        busy(true); setStatus('正在创建房间…');
+        const code = await this.mp.createRoom();
+        busy(false);
+        if (code) { showRoomCode(code); setStatus('🎉 房间已创建！房间码：' + code + ' 。把这串码发给小伙伴，让他们输入后点「加入」。进入游戏后就能一起搭建啦！'); }
+      });
+    }
+    if (joinBtn && codeInput) {
+      const doJoin = async () => {
+        if (nameInput && nameInput.value.trim()) this.mp.setNickname(nameInput.value);
+        const code = codeInput.value.trim();
+        if (!code) { setStatus('请先输入小伙伴给你的 6 位房间码～'); codeInput.focus(); return; }
+        syncSkin();
+        busy(true); setStatus('正在加入房间 ' + code + ' …');
+        const ok = await this.mp.joinRoom(code);
+        busy(false);
+        if (ok) { showRoomCode(code); setStatus('✅ 已加入房间 ' + code + '！点「开始冒险」进入世界，就能和小伙伴一起搭建、互相看到对方啦。'); }
+      };
+      joinBtn.addEventListener('click', (e) => { e.stopPropagation(); doJoin(); });
+      codeInput.addEventListener('click', (e) => e.stopPropagation());
+      codeInput.addEventListener('keydown', (e) => { e.stopPropagation(); if (e.key === 'Enter') doJoin(); });
+    }
+    if (copyBtn && codeValue) {
+      copyBtn.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        const code = codeValue.textContent || '';
+        try {
+          await navigator.clipboard.writeText(code);
+          copyBtn.textContent = '✅ 已复制';
+          setTimeout(() => { copyBtn.textContent = '📋 复制'; }, 1500);
+        } catch (err) {
+          // 剪贴板权限不可用时降级：选中房码文本
+          setStatus('复制失败，可以长按/选中房间码 ' + code + ' 手动复制给小伙伴。');
+        }
+      });
+    }
+    // 阻止面板上的点击/按键冒泡到开始界面（避免误触开始游戏 / 打字触发游戏按键）
+    box.addEventListener('click', (e) => e.stopPropagation());
+    box.addEventListener('keydown', (e) => e.stopPropagation());
+    box.addEventListener('pointerdown', (e) => e.stopPropagation());
   }
 
   /** 合法主角 key */
@@ -1597,6 +1862,9 @@ class Game {
         case 'home':
           this.teleportHome();
           break;
+        case 'map':
+          this._toggleWorldMap();
+          break;
         case 'fly':
           this.player.flying = !this.player.flying;
           if (this.player.flying) { this.player.velocity.y = 0; }
@@ -1650,7 +1918,7 @@ class Game {
     this.world.generateChunkData(chunk);
     chunk.buildMesh(
       (wx, wy, wz) => this.world.getBlock(wx, wy, wz),
-      this.world.material, this.world.waterMaterial, this.world.crossMaterial
+      this.world.material, this.world.waterMaterial, this.world.crossMaterial, this.world.glassMaterial
     );
     this.world.chunks.set(key, chunk);
     // 检查是否生成村庄（村庄写入的方块属于世界生成，不计入存档改动）
@@ -1664,7 +1932,7 @@ class Game {
       if (chunk.dirty) {
         chunk.buildMesh(
           (wx, wy, wz) => this.world.getBlock(wx, wy, wz),
-          this.world.material, this.world.waterMaterial, this.world.crossMaterial
+          this.world.material, this.world.waterMaterial, this.world.crossMaterial, this.world.glassMaterial
         );
       }
     }
@@ -1706,6 +1974,9 @@ class Game {
     // 载入历史方块改动（区块生成时回放）
     if (this.saveData && this.saveData.edits) this.world.loadEdits(this.saveData.edits);
     this.world.onPlayerEdit = () => this._markSaveDirty();
+    // 家具微模型构建钩子：床/桌/椅/沙发/箱子渲染为真实 3D 造型而非满格贴图块
+    this.world.furnitureBuilder = (chunk) =>
+      buildFurnitureGroup(THREE, chunk, chunk.cx * CHUNK_SIZE, chunk.cz * CHUNK_SIZE);
 
     // 昼夜循环系统（管理太阳/月亮/星空/天空色/光照）
     this.dayNight = new DayNightCycle(this.scene, { dayLength: 240, startTime: 0.28 });
@@ -1733,6 +2004,9 @@ class Game {
 
     // 出生点结构（凉亭/小桥/鲜花）
     this.structures = new StructureGenerator(this.world);
+    // 樱花海岛装饰钩子：任何区块（含老存档后加载的区块）首次生成地形时，
+    // 若落在樱花岛范围，自动堆出环形山/火山口湖/山顶樱花林/湖边庄园
+    this.world.chunkDecorator = (chunk) => this.structures.decorateSakuraIslandChunk(chunk);
 
     // 天空飞鸟
     this.birdManager = new BirdManager(this.scene, this.isMobile ? 5 : 9);
@@ -1772,19 +2046,53 @@ class Game {
     this.playerChar = new PlayerCharacter(this.scene);
     this.playerChar.setSkin(this._getSelectedChar());
     this.camDist = 4.2;
+
+    // 多人共建（未配置 Supabase 时自动禁用，不影响单机）
+    this.mp = new Multiplayer();
+    this.mp.setSkin(this._getSelectedChar());
+    this.remotePlayers = new RemotePlayers(this.scene, THREE, PlayerCharacter);
+    this.mp.on({
+      edit: (r, isInitial) => {
+        try { this.world.setBlockRemote(r.bx, r.by, r.bz, r.type, (typeof r.dir === 'number' ? r.dir : -1)); } catch (e) {}
+      },
+      presence: (list) => { try { this.remotePlayers.sync(list); } catch (e) {} },
+      status: (msg) => { this._onMpStatus(msg); },
+    });
+  }
+
+  // 多人状态提示：开始界面时写到面板，游戏内用 toast
+  _onMpStatus(msg) {
+    const el = document.getElementById('mpStatus');
+    if (el && this.ui.startScreen && this.ui.startScreen.style.display !== 'none') {
+      el.textContent = msg;
+      el.classList.remove('mp-error', 'mp-success');
+      if (/🛠️|失败|找不到|📶/.test(msg)) el.classList.add('mp-error');
+      else if (/🎉|✅/.test(msg)) el.classList.add('mp-success');
+    }
+    try { this._toast(msg); } catch (e) {}
   }
 
   toggleView() {
     this.viewMode = this.viewMode === 'first' ? 'third' : 'first';
     this.playerChar.setVisible(this.viewMode === 'third');
     this.heldHolder.visible = this.viewMode === 'first';
-    // 第三人称时把角色手持与盔甲同步
-    if (this.viewMode === 'third') {
-      // 立即把角色放到玩家身上（避免等下一帧才出现 / 停在世界原点）
-      if (this.player) this.playerChar.update(this.player, 0);
-      this._syncCharacter();
+    if (this.player) {
+      this.player._orbitMode = (this.viewMode === 'third');
+      if (this.viewMode === 'third') {
+        // 进第三人称：相机从角色背后开始（orbitYaw 对齐当前朝向），身体朝向初始为前进方向
+        this.player.orbitYaw = this.player.yaw;
+        this.player.orbitPitch = 0.22;
+        this.player.bodyYaw = this.player.yaw;
+        // 立即把角色放到玩家身上（避免等下一帧才出现 / 停在世界原点）
+        this.playerChar.update(this.player, 0);
+        this._syncCharacter();
+      } else {
+        // 回第一人称：把视角朝向同步到当前相机轨道角，保证转身无缝
+        this.player.yaw = this.player.orbitYaw;
+        this.player.pitch = 0;
+      }
     }
-    this._toast(this.viewMode === 'third' ? '第三人称视角 (V 切回)' : '第一人称视角 (V 切换)');
+    this._toast(this.viewMode === 'third' ? '第三人称环绕视角（转鼠标看全身，V 切回）' : '第一人称视角 (V 切换)');
   }
 
   _syncCharacter() {
@@ -1886,8 +2194,18 @@ class Game {
     this.player = new Player(this.camera, this.world);
     this.player.dropManager = this.dropManager;
     // 放/拆方块：音效 + 新手引导进度（此时 player 与 sound 均已就绪）
-    this.player.onPlace = () => { if (this.sound) this.sound.place(); if (this.tutorial) this.tutorial.notifyPlace(); this._scheduleSave(); };
-    this.player.onBreak = () => { if (this.sound) this.sound.break(); if (this.tutorial) this.tutorial.notifyBreak(); this._scheduleSave(); };
+    this.player.onPlace = (x, y, z, type, dir) => {
+      if (this.sound) this.sound.place();
+      if (this.tutorial) this.tutorial.notifyPlace();
+      this._scheduleSave();
+      if (this.mp && this.mp.inRoom) this.mp.pushEdit(x, y, z, type, dir);
+    };
+    this.player.onBreak = (x, y, z, type, dir) => {
+      if (this.sound) this.sound.break();
+      if (this.tutorial) this.tutorial.notifyBreak();
+      this._scheduleSave();
+      if (this.mp && this.mp.inRoom) this.mp.pushEdit(x, y, z, type, dir);
+    };
   }
 
   /** 初始化方块高亮 */
@@ -2090,6 +2408,12 @@ class Game {
         e.preventDefault();
         return;
       }
+      // 世界地图打开时：ESC / M 关闭
+      if (this.worldMap && this.worldMap.open) {
+        if (e.code === 'Escape' || e.code === 'KeyM') this.worldMap.closeMap();
+        e.preventDefault();
+        return;
+      }
       // 兑换商店打开时吞掉按键（仅 ESC/G 关闭）
       if (this.shop && this.shop.isOpen) {
         if (e.code === 'Escape' || e.code === 'KeyG') this.shop.close();
@@ -2200,15 +2524,28 @@ class Game {
         return;
       }
 
-      // H 键：关闭 / 重开新手教程面板（指针锁定时也能用，无需解放鼠标）
-      if (e.code === 'KeyH' && this.tutorial) {
-        if (this.tutorial._dismissed) this.tutorial.show();
-        else this.tutorial.dismiss();
+      // Q 键：打开/收起操作说明面板（帮助），指针锁定时也能用，无需解放鼠标
+      if (e.code === 'KeyQ') {
+        const panel = document.getElementById('controlsPanel');
+        if (panel) panel.classList.toggle('collapsed');
+        e.preventDefault();
+      }
+
+      // H 键：关闭/重开新手引导提示（向导兔子任务面板）
+      if (e.code === 'KeyH') {
+        if (this.tutorial) this.tutorial.toggle();
+        e.preventDefault();
       }
 
       // R 键：一键回到出生家园（防迷路/卡住）
       if (e.code === 'KeyR' && !e.ctrlKey && !e.metaKey) {
         this.teleportHome();
+      }
+
+      // M 键：打开/关闭世界小地图
+      if (e.code === 'KeyM' && !e.ctrlKey && !e.metaKey) {
+        e.preventDefault();
+        this._toggleWorldMap();
       }
     });
 
@@ -2220,7 +2557,15 @@ class Game {
     document.addEventListener('mousemove', (e) => {
       if (!this.isPointerLocked) return;
       if (this.inventory && this.inventory.isOpen) return;
-      this.player.onMouseMove(e.movementX, e.movementY);
+      if (this.viewMode === 'third') {
+        // 第三人称：鼠标控制环绕相机轨道角（可 360° 绕到角色正面）
+        const sens = 0.0024;
+        this.player.orbitYaw -= e.movementX * sens;
+        this.player.orbitPitch += e.movementY * sens;
+        this.player.orbitPitch = Math.max(-0.35, Math.min(1.15, this.player.orbitPitch));
+      } else {
+        this.player.onMouseMove(e.movementX, e.movementY);
+      }
     });
 
     // 鼠标点击（仅桌面端指针锁定后）
@@ -2388,7 +2733,7 @@ class Game {
     this.ui.blockHighlight.style.display = 'none'; // 已禁用
     // 右上角操作说明面板（仅桌面端）
     if (!this.isMobile) {
-      this.ui.controlsPanel.style.display = show ? 'flex' : 'none';
+      this.ui.controlsPanel.style.display = show ? 'block' : 'none';
     }
     // 移动端控件：仅在移动端显示
     if (this.isMobile) {
@@ -2460,7 +2805,8 @@ class Game {
       `区块: ${cx}, ${cz} | 已加载: ${chunks}<br>` +
       `生物: ${this.animalManager ? this.animalManager.animals.length : 0} 只 | ` +
       `掉落物: ${this.dropManager ? this.dropManager.count : 0}<br>` +
-      `天气: ${weatherName} (T切换)${this.magnetMode ? ' | 收集中(9)' : ''}`;
+      `天气: ${weatherName} (T切换)${this.magnetMode ? ' | 收集中(9)' : ''}<br>` +
+      `<span class="hud-keys">🗺️M 地图 · 🏠R 回家 · ❔Q 说明 · H 新手提示 · V 视角</span>`;
 
     this.ui.blockHighlight.style.display = 'none';
   }
@@ -2504,34 +2850,31 @@ class Game {
       this.highlight.update(this.player.targetBlock);
       if (this.tutorial) this.tutorial.update(dt, this.player);
 
-      // 第三人称：相机移到角色背后
+      // 多人：上报自己位置 + 平滑其他特工
+      if (this.mp && this.mp.inRoom) {
+        const yawForMp = (this.viewMode === 'third' && typeof this.player.orbitYaw === 'number') ? this.player.orbitYaw : this.player.yaw;
+        this.mp.updatePos(this.player.position.x, this.player.position.y, this.player.position.z, yawForMp);
+      }
+      if (this.remotePlayers) this.remotePlayers.update(dt);
+
+      // 第三人称：环绕相机（可 360° 绕角色，相机始终看向角色身体）
       if (this.viewMode === 'third') {
-        const yaw = this.player.yaw, pitch = this.player.pitch;
+        const oy = this.player.orbitYaw, op = this.player.orbitPitch;
         const dist = this.camDist;
-        const backX = Math.sin(yaw) * Math.cos(pitch);
-        const backZ = Math.cos(yaw) * Math.cos(pitch);
-        const backY = -Math.sin(pitch);
-        const eyeY = this.player.position.y + this.player.eyeHeight;
-        // 理想相机位置
+        // 相机在轨道方向上的位置（绕角色）
+        const backX = Math.sin(oy) * Math.cos(op);
+        const backZ = Math.cos(oy) * Math.cos(op);
+        const backY = -Math.sin(op);
+        const focusY = this.player.position.y + this.player.eyeHeight * 0.82; // 看向角色躯干
         let camX = this.player.position.x + backX * dist;
-        let camY = eyeY + backY * dist;
+        let camY = focusY - backY * dist;
         let camZ = this.player.position.z + backZ * dist;
-        // 简单碰撞：避免相机进墙，向角色拉近
+        // 简单碰撞：避免相机进地面，向角色抬高/拉近
         const ground = this.world.getSurfaceHeight ? this.world.getSurfaceHeight(
           Math.floor(camX), Math.floor(camZ)) : 0;
-        if (camY < ground + 0.5) camY = ground + 0.5;
+        if (camY < ground + 0.6) camY = ground + 0.6;
         this.camera.position.set(camX, camY, camZ);
-        // 让相机看向"角色眼睛沿视线方向"的远处点，保证屏幕准星 == 真正瞄准/放置位置
-        const aimDir = new THREE.Vector3(
-          -Math.sin(yaw) * Math.cos(pitch),
-          Math.sin(pitch),
-          -Math.cos(yaw) * Math.cos(pitch)
-        );
-        this.camera.lookAt(
-          this.player.position.x + aimDir.x * 10,
-          eyeY + aimDir.y * 10,
-          this.player.position.z + aimDir.z * 10
-        );
+        this.camera.lookAt(this.player.position.x, focusY, this.player.position.z);
         // 角色更新
         if (this.playerChar) {
           this.playerChar.update(this.player, dt);
@@ -2609,6 +2952,11 @@ class Game {
         const dHome = Math.hypot(px, pz);
         if (dHome < 34) density = Math.max(density, 0.55);
         else if (dHome < 50) density = Math.max(density, 0.25);
+        // 樱花岛（正北海面环形山樱花林 + 湖边庄园）：靠近即花瓣纷飞，最浓
+        if (this.structures && typeof SAKURA_ISLAND_X === 'number') {
+          const dIsle = Math.hypot(px - SAKURA_ISLAND_X, pz - SAKURA_ISLAND_Z);
+          if (dIsle < 60) density = Math.max(density, 1);
+        }
       } catch (e) { density = 0; }
       this.sakura.setDensity(density);
       this.sakura.update(dt, this.player.position);

@@ -56,6 +56,7 @@ export class WindmillBlades {
 
     // 定位到塔身正面轴点；叶片平面朝向玩家（+z）
     this.group.position.set(axis.x, axis.y, axis.z);
+    if (axis.scale && axis.scale > 0) this.group.scale.setScalar(axis.scale);
     scene.add(this.group);
   }
 

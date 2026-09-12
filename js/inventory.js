@@ -1,6 +1,6 @@
 import * as THREE from 'three';
-import { BlockType, BlockNames, BLOCK_TEXTURES, createBlockTexture, ATLAS_COLS, TEX_SIZE } from './voxel.js?v=20260925l';
-import { ItemNames, getItemIcon } from './equipment.js?v=20260925l';
+import { BlockType, BlockNames, BLOCK_TEXTURES, createBlockTexture, ATLAS_COLS, TEX_SIZE } from './voxel.js?v=20260925aa';
+import { ItemNames, getItemIcon } from './equipment.js?v=20260925aa';
 
 /**
  * 创造模式背包：
@@ -107,13 +107,15 @@ export class Inventory {
     const texDef = BLOCK_TEXTURES[type];
     let texIndex;
     if (texDef === 'cross') {
-      // 十字植物，使用任意面索引
-      texIndex = type === BlockType.TALL_GRASS ? 39
-        : type === BlockType.FLOWER_RED ? 36
-        : type === BlockType.FLOWER_YELLOW ? 37
-        : type === BlockType.FLOWER_WHITE ? 38
+      // 十字植物，使用任意面纹理索引（用 TEX 常量对应值）
+      texIndex = type === BlockType.TALL_GRASS ? 36
+        : type === BlockType.FLOWER_RED ? 37
+        : type === BlockType.FLOWER_YELLOW ? 38
+        : type === BlockType.FLOWER_WHITE ? 39
         : type === BlockType.MUSHROOM_RED ? 40
-        : type === BlockType.MUSHROOM_BROWN ? 41 : 42;
+        : type === BlockType.MUSHROOM_BROWN ? 41
+        : type === BlockType.TORCH ? 107
+        : type === BlockType.SWEET_BERRY ? 126 : 42;
     } else if (typeof texDef === 'object') {
       texIndex = texDef.side !== undefined ? texDef.side : texDef.top;
     } else {

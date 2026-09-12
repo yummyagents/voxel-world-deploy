@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { BlockType, isSolid, getBlockColor } from './voxel.js?v=20260925l';
+import { BlockType, isSolid, getBlockColor } from './voxel.js?v=20260925aa';
 
 /**
  * 掉落物系统

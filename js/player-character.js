@@ -352,8 +352,10 @@ export class PlayerCharacter {
       player.position.y + 0.25,
       player.position.z
     );
-    // 朝向：模型正面朝 +Z，玩家视线前向为 (-sin yaw, -cos yaw)，故 rotation.y = yaw + π
-    if (typeof player.yaw === 'number') this.group.rotation.y = player.yaw + Math.PI;
+    // 朝向：模型正面朝 +Z，前向为 (-sin yaw, -cos yaw)，故 rotation.y = yaw + π
+    // 第三人称环绕时用 bodyYaw（移动方向，静止保持），第一人称用 yaw。
+    const facingYaw = (player._orbitMode && typeof player.bodyYaw === 'number') ? player.bodyYaw : player.yaw;
+    if (typeof facingYaw === 'number') this.group.rotation.y = facingYaw + Math.PI;
     // 走路摆臂/摆腿
     if (moving && !inAir) this.walkPhase += (dt || 0.016) * 9;
     const swing = moving && !inAir ? Math.sin(this.walkPhase) * 0.7 : 0;
