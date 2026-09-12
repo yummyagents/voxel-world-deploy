@@ -9,7 +9,7 @@
  * - 带网格、指北针、十字坐标线；出生点始终标记为中心参照。
  */
 
-import { Biome, BiomeNames } from './voxel.js?v=20260925ah';
+import { Biome, BiomeNames } from './voxel.js?v=20260925ai';
 
 // 四档缩放（显示半径，单位：格）
 const RANGE_LEVELS = [
