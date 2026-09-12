@@ -1,7 +1,7 @@
 // multiplayer.js —— 多人联机同步（浏览器直连 Supabase）
 // 负责：创建/加入房间、拉取共建方块、Realtime 实时同步放拆与玩家现身。
 // 未配置 Supabase 或库未加载时自动禁用，不影响单机游戏。
-import { SUPABASE_URL, SUPABASE_ANON_KEY, isCommunityEnabled } from './config.js?v=20260925af';
+import { SUPABASE_URL, SUPABASE_ANON_KEY, isCommunityEnabled } from './config.js?v=20260925ah';
 
 const PID_KEY = 'voxel_mp_pid_v1';
 const NAME_KEY = 'voxel_mp_name_v1';
@@ -38,7 +38,9 @@ export class Multiplayer {
     this.pos = { x: 0, y: 0, z: 0, yaw: 0 };
     this._mine = new Map(); // 刚发送的编辑 key -> 时间戳，用于跳过自己的回声
     this._acceptEdits = false; // 切换到房间世界完成后才接受实时方块
-    this.cb = { edit: null, presence: null, status: null, roomEnter: null, chat: null };
+    this._rosterReady = false; // 正式进房现身之后才向前台广播名单/横幅
+    this._knownPids = null; // 已在场玩家 pid 集合；null 表示尚未做首次同步（不报上线）
+    this.cb = { edit: null, presence: null, status: null, roomEnter: null, chat: null, roster: null };
   }
 
   setNickname(n) { this.nickname = (n || '').trim().slice(0, 12) || '小探险家'; localStorage.setItem(NAME_KEY, this.nickname); }
@@ -148,6 +150,10 @@ export class Multiplayer {
     this.joinAt = Date.now();
     this._acceptEdits = false;
     this._mine.clear();
+    // 清点阶段产生的 presence 只用于数人，不向前台广播；正式进房后再开始名单/上下线广播
+    this._knownPids = null;
+    this._nameCache = null;
+    this._rosterReady = false;
 
     // 进房确认后、应用房间方块前：让游戏切换成"同房共享世界"（统一种子/出生点）
     if (this.cb.roomEnter) { try { await this.cb.roomEnter(code); } catch (e) { console.warn('[mp] roomEnter hook', e); } }
@@ -169,6 +175,11 @@ export class Multiplayer {
 
     const total = occupants.size + 1;
     this._status('已进入房间 ' + code + '（' + total + '/' + Multiplayer.ROOM_MAX_PLAYERS + ' 人），和小伙伴一起搭吧！');
+
+    // 正式现身之后，立即向前台发一次"入场名单"，用于弹欢迎横幅/显示徽章（只此一次）
+    this._rosterReady = true;
+    this._knownPids = null;
+    this._emitPresence(ch);
     return true;
   }
 
@@ -249,18 +260,50 @@ export class Multiplayer {
   }
 
   _emitPresence(ch) {
-    if (!this.cb.presence) return;
     const state = ch.presenceState ? ch.presenceState() : {};
     const list = [];
+    const nowPids = new Set();
+    const nameByPid = new Map();
     for (const key in state) {
       for (const p of state[key]) {
         if (p && p.pid && p.pid !== this.playerId) {
-          list.push({ id: p.pid, nickname: p.nickname || '小探险家', skin: p.skin || 'burger',
-            x: p.x || 0, y: p.y || 0, z: p.z || 0, yaw: p.yaw || 0 });
+          if (!nowPids.has(p.pid)) {
+            nowPids.add(p.pid);
+            nameByPid.set(p.pid, p.nickname || '小探险家');
+            list.push({ id: p.pid, nickname: p.nickname || '小探险家', skin: p.skin || 'burger',
+              x: p.x || 0, y: p.y || 0, z: p.z || 0, yaw: p.yaw || 0 });
+          }
         }
       }
     }
-    this.cb.presence(list);
+    if (this.cb.presence && this.inRoom) this.cb.presence(list);
+
+    // 上线/下线差分（清点人数阶段 _rosterReady=false 时不广播；正式进房后第一次只登记名单）
+    if (this.cb.roster && this.inRoom && this._rosterReady) {
+      if (this._knownPids === null) {
+        this._knownPids = nowPids;
+        this.cb.roster({ type: 'snapshot', joined: [], left: [], count: list.length, total: list.length + 1 });
+      } else {
+        const joined = [];
+        const left = [];
+        for (const pid of nowPids) {
+          if (!this._knownPids.has(pid)) joined.push({ pid, nickname: nameByPid.get(pid) || '小探险家' });
+        }
+        for (const pid of this._knownPids) {
+          if (!nowPids.has(pid)) {
+            // 尝试拿最后一次 presence 的昵称（leave 事件 state 里通常已无此人）
+            left.push({ pid, nickname: this._nameCache && this._nameCache.get(pid) || '小探险家' });
+          }
+        }
+        this._knownPids = nowPids;
+        if (joined.length || left.length) {
+          this.cb.roster({ type: 'change', joined, left, count: list.length, total: list.length + 1 });
+        } else {
+          this.cb.roster({ type: 'count', joined: [], left: [], count: list.length, total: list.length + 1 });
+        }
+      }
+    }
+    this._nameCache = nameByPid;
   }
 
   /** 本地放/拆方块后调用，同步到房间（dir 为家具朝向，无朝向传 0） */
@@ -296,6 +339,10 @@ export class Multiplayer {
   leave() {
     this.inRoom = false;
     this.roomCode = null;
+    this._knownPids = null;
+    this._nameCache = null;
+    this._rosterReady = false;
+    this._acceptEdits = false;
     if (this.presenceTimer) { clearInterval(this.presenceTimer); this.presenceTimer = null; }
     if (this.channel && this.client) { try { this.client.removeChannel(this.channel); } catch (e) {} }
     this.channel = null;

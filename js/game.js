@@ -8,35 +8,38 @@ import {
   World, Chunk, BlockType, BlockNames, isSolid,
   CHUNK_SIZE, CHUNK_HEIGHT, RENDER_DISTANCE, getBlockColor,
   isMobileDevice, getRenderDistance, getBlockDrop, BiomeNames, Biome,
-} from './voxel.js?v=20260925af';
-import { Multiplayer } from './multiplayer.js?v=20260925af';
-import { isCommunityEnabled } from './config.js?v=20260925af';
-import { AnimalManager, Sheep, Rabbit, Horse, Cow, Pig, Chicken, Villager, IronGolem } from './animals.js?v=20260925af';
-import { WeatherSystem, WeatherType, WeatherNames } from './weather.js?v=20260925af';
-import { DayNightCycle } from './daynight.js?v=20260925af';
-import { DropManager } from './drops.js?v=20260925af';
-import { VillageGenerator } from './village.js?v=20260925af';
-import { Inventory } from './inventory.js?v=20260925af';
-import { ExchangeShop } from './exchange.js?v=20260925af';
-import { createHeldModel, createArmModel, ItemNames, getItemIcon, AGENT_ARMS } from './equipment.js?v=20260925af';
-import { StructureGenerator, PLAYER_SPAWN, SAKURA_ISLAND_X, SAKURA_ISLAND_Z } from './structures.js?v=20260925af';
-import { PlayerCharacter } from './player-character.js?v=20260925af';
-import { SakuraPetals } from './sakura.js?v=20260925af';
-import { BirdManager, ButterflyManager } from './birds.js?v=20260925af';
-import { WindmillBlades } from './windmill.js?v=20260925af';
-import { WorldMap } from './world-map.js?v=20260925af';
-import { Fireflies } from './fireflies.js?v=20260925af';
-import { SoundFX } from './audio.js?v=20260925af';
-import { Tutorial } from './tutorial.js?v=20260925af';
+} from './voxel.js?v=20260925ah';
+import { Multiplayer } from './multiplayer.js?v=20260925ah';
+import { isCommunityEnabled } from './config.js?v=20260925ah';
+import { AnimalManager, Sheep, Rabbit, Horse, Cow, Pig, Chicken, Villager, IronGolem } from './animals.js?v=20260925ah';
+import { WeatherSystem, WeatherType, WeatherNames } from './weather.js?v=20260925ah';
+import { DayNightCycle } from './daynight.js?v=20260925ah';
+import { DropManager } from './drops.js?v=20260925ah';
+import { VillageGenerator } from './village.js?v=20260925ah';
+import { Inventory } from './inventory.js?v=20260925ah';
+import { ExchangeShop } from './exchange.js?v=20260925ah';
+import { createHeldModel, createArmModel, ItemNames, getItemIcon, AGENT_ARMS } from './equipment.js?v=20260925ah';
+import { StructureGenerator, PLAYER_SPAWN, SAKURA_ISLAND_X, SAKURA_ISLAND_Z } from './structures.js?v=20260925ah';
+import { PlayerCharacter } from './player-character.js?v=20260925ah';
+import { SakuraPetals } from './sakura.js?v=20260925ah';
+import { BirdManager, ButterflyManager } from './birds.js?v=20260925ah';
+import { WindmillBlades } from './windmill.js?v=20260925ah';
+import { WorldMap } from './world-map.js?v=20260925ah';
+import { Fireflies } from './fireflies.js?v=20260925ah';
+import { SoundFX } from './audio.js?v=20260925ah';
+import { Tutorial } from './tutorial.js?v=20260925ah';
 import {
   loadSave, writeSave, clearSave, hasSave,
   exportSave, importSave,
-} from './save.js?v=20260925af';
-import { Portfolio } from './portfolio.js?v=20260925af';
-import { buildFurnitureGroup } from './furniture.js?v=20260925af';
+} from './save.js?v=20260925ah';
+import { Portfolio } from './portfolio.js?v=20260925ah';
+import { buildFurnitureGroup } from './furniture.js?v=20260925ah';
 
 // 多人联机：队友超过该水平距离（格）时，屏幕边缘出现方向指引
 const TEAM_POINTER_SHOW_DIST = 40;
+const TEAM_RECALL_DIST = 60;     // 与最近队友超过这个距离，会被自动拉回
+const TEAM_RECALL_DELAY = 3.0;   // 超距持续几秒才召回（避免偶然擦边）
+const TEAM_RECALL_COOLDOWN = 20; // 两次自动召回间隔（秒）
 
 /* ============================================
    玩家类 - 第一人称角色控制
@@ -958,6 +961,9 @@ class Game {
     if (this._teamPointerEl) {
       this._teamPointerEl.addEventListener('click', (e) => { e.preventDefault(); this.teleportToTeammate(); });
     }
+    // 多人"走远自动召回"状态
+    this._recallOverTime = 0;
+    this._recallCooldown = 0;
     this._initChatUI();
 
     // 热键栏 9 格由 inventory.js 控制（E 键打开创造背包配置）
@@ -1449,51 +1455,83 @@ class Game {
     try {
       const near = this.remotePlayers.nearest(this.player.position.x, this.player.position.z);
       if (!near) { this._toast('找不到队友位置'); return; }
-      const rp = near.rp;
-      const tx = rp.cur.x, tz = rp.cur.z;
-      // 强制加载目标周围区块，避免读到未生成地形
-      for (let cx = -1; cx <= 1; cx++) {
-        for (let cz = -1; cz <= 1; cz++) this.world.update(tx + cx * 16, tz + cz * 16);
-      }
-      // 落在队友旁边 1.5 格，避免两个角色重叠被互相推开
-      let lx = tx + 1.5, lz = tz;
-      let y = rp.cur.y + 1;
-      try {
-        const surf = this.world.getSurfaceHeight(Math.floor(lx), Math.floor(lz));
-        if (typeof surf === 'number' && surf > 0) y = surf + 2;
-      } catch (e) {}
-      this.player.position.set(lx, y, lz);
-      this.player.velocity.set(0, 0, 0);
-      // 落在队友东侧，面朝 -Z 即朝向队友
-      this.player.yaw = 0;
-      if (typeof this.player.orbitYaw === 'number') this.player.orbitYaw = 0;
-      this.player.onGround = false;
-      if (this.playerChar) this.playerChar.group.position.set(lx, y + 0.25, lz);
-      this.world.update(lx, lz);
-      this._toast(`🧲 已传送到 ${rp.nickname} 身边（相距约 ${Math.round(near.dist)} 格）`);
-      if (this.sound) try { this.sound.click(); } catch (e) {}
+      if (this._doTeleportTo(near)) this._toast(`🧲 已传送到 ${near.rp.nickname} 身边（相距约 ${Math.round(near.dist)} 格）`);
     } catch (e) {
       console.warn('[传送队友失败]', e);
       this._toast('传送失败，请再试一次');
     }
   }
 
+  /** 真正执行落地到队友身边；成功 true。供手动传送与自动召回共用。 */
+  _doTeleportTo(near) {
+    const rp = near.rp;
+    const tx = rp.cur.x, tz = rp.cur.z;
+    // 强制加载目标周围区块，避免读到未生成地形
+    for (let cx = -1; cx <= 1; cx++) {
+      for (let cz = -1; cz <= 1; cz++) this.world.update(tx + cx * 16, tz + cz * 16);
+    }
+    // 落在队友旁边 1.5 格，避免两个角色重叠被互相推开
+    let lx = tx + 1.5, lz = tz;
+    let y = rp.cur.y + 1;
+    try {
+      const surf = this.world.getSurfaceHeight(Math.floor(lx), Math.floor(lz));
+      if (typeof surf === 'number' && surf > 0) y = surf + 2;
+    } catch (e) {}
+    this.player.position.set(lx, y, lz);
+    this.player.velocity.set(0, 0, 0);
+    // 落在队友东侧，面朝 -Z 即朝向队友
+    this.player.yaw = 0;
+    if (typeof this.player.orbitYaw === 'number') this.player.orbitYaw = 0;
+    this.player.onGround = false;
+    if (this.playerChar) this.playerChar.group.position.set(lx, y + 0.25, lz);
+    this.world.update(lx, lz);
+    if (this.sound) try { this.sound.click(); } catch (e) {}
+    return true;
+  }
+
+  /**
+   * 走远自动召回：与最近队友距离 > TEAM_RECALL_DIST 持续 TEAM_RECALL_DELAY 秒，
+   * 就把本地玩家拉回队友身边（只移动走远的那一方，各自独立判定，不会互相弹跳）。
+   */
+  _updateTeamRecall(dt) {
+    if (!(this.isRunning && this.player && this.mp && this.mp.inRoom && this.remotePlayers && this.remotePlayers.count > 0)) {
+      this._recallOverTime = 0;
+      return;
+    }
+    if (this._recallCooldown > 0) this._recallCooldown -= dt;
+    const near = this.remotePlayers.nearest(this.player.position.x, this.player.position.z);
+    if (!near) { this._recallOverTime = 0; return; }
+    if (near.dist > TEAM_RECALL_DIST) {
+      this._recallOverTime += dt;
+      if (this._recallOverTime >= TEAM_RECALL_DELAY && this._recallCooldown <= 0) {
+        this._doTeleportTo(near);
+        this._recallOverTime = 0;
+        this._recallCooldown = TEAM_RECALL_COOLDOWN;
+        this._toast(`🧲 离 ${near.rp.nickname} 太远啦，已带你回到 TA 身边`);
+        this._appendChatSystem && this._appendChatSystem('你走得太远，已自动回到小伙伴身边');
+      }
+    } else {
+      this._recallOverTime = 0;
+    }
+  }
+
   /** 每帧更新"队友过远"边缘指引（多人联机） */
   _updateTeamPointer() {
     const el = this._teamPointerEl;
+    const inRoom = !!(this.isRunning && this.mp && this.mp.inRoom);
+    // 聊天条 / 找队友·说话按钮：只要在房间里就显示（哪怕暂时只有自己）
+    document.querySelectorAll('.m-fn-team, .m-fn-chat').forEach((b) => { b.style.display = inRoom ? '' : 'none'; });
+    if (inRoom) {
+      if (this._chatDock && this._chatDock.style.display === 'none') this._setChatVisible(true);
+    } else {
+      this._setChatVisible(false);
+    }
     if (!el) return;
-    const active = !!(this.isRunning && this.mp && this.mp.inRoom && this.remotePlayers && this.remotePlayers.count > 0);
+    const active = !!(inRoom && this.remotePlayers && this.remotePlayers.count > 0);
     if (!active) {
       if (el.classList.contains('show')) el.classList.remove('show');
-      document.querySelectorAll('.m-fn-team, .m-fn-chat').forEach((b) => { b.style.display = 'none'; });
-      this._setChatVisible(false);
       return;
     }
-
-    // 移动端⋯菜单里的"找队友/说话"按钮随联机状态显示；聊天条显示
-    document.querySelectorAll('.m-fn-team, .m-fn-chat').forEach((b) => { b.style.display = ''; });
-    if (this._chatDock && this._chatDock.style.display === 'none') this._setChatVisible(true);
-
     const near = this.remotePlayers.nearest(this.player.position.x, this.player.position.z);
     if (!near || near.dist <= TEAM_POINTER_SHOW_DIST) { el.classList.remove('show'); return; }
 
@@ -1787,7 +1825,13 @@ class Game {
       if (document.visibilityState === 'hidden') autoSave();
     });
     // 离开页面时退出多人房间（presence 自动通知其他人离线）
-    const leaveMp = () => { try { if (this.mp && this.mp.inRoom) this.mp.leave(); } catch (e) {} };
+    const leaveMp = () => {
+      try {
+        if (this.mp && this.mp.inRoom) this.mp.leave();
+        const badge = document.getElementById('mpBadge');
+        if (badge) badge.hidden = true;
+      } catch (e) {}
+    };
     window.addEventListener('beforeunload', leaveMp);
     window.addEventListener('pagehide', leaveMp);
 
@@ -1951,6 +1995,12 @@ class Game {
     box.addEventListener('click', (e) => e.stopPropagation());
     box.addEventListener('keydown', (e) => e.stopPropagation());
     box.addEventListener('pointerdown', (e) => e.stopPropagation());
+
+    // 初始一定隐藏游戏内多人徽章/横幅，只有真正进房后才出现
+    const badge = document.getElementById('mpBadge');
+    const banner = document.getElementById('mpBanner');
+    if (badge) badge.hidden = true;
+    if (banner) { banner.hidden = true; banner.classList.remove('hide'); }
   }
 
   /** 合法主角 key */
@@ -2369,7 +2419,79 @@ class Game {
       status: (msg) => { this._onMpStatus(msg); },
       roomEnter: async (code) => { await this._switchToRoomWorld(code); },
       chat: (msg) => { this._onTeammateChat(msg); },
+      roster: (ev) => { this._onMpRoster(ev); },
     });
+  }
+
+  // —— 多人在线名单 / 上下线提醒 / 状态徽章 ——
+  _onMpRoster(ev) {
+    try {
+      // 双保险：只有真正在房间里才更新徽章/弹横幅（清点人数阶段不会误触发）
+      if (!this.mp || !this.mp.inRoom || !this.mp.roomCode) return;
+      const total = (typeof ev.total === 'number' ? ev.total : ev.count + 1);
+      this._setMpBadge(total);
+      if (ev.type === 'snapshot') {
+        // 自己刚进房：弹欢迎横幅 + 已在场队友提示
+        this._showMpBanner(total, ev.count);
+        if (ev.count > 0) this._appendChatSystem('当前房间还有 ' + ev.count + ' 位小伙伴在线');
+        else this._appendChatSystem('你是第一个进入房间的，等小伙伴加入吧');
+      } else if (ev.type === 'change') {
+        for (const j of ev.joined) {
+          this._toast('🟢 ' + j.nickname + ' 上线啦');
+          this._appendChatSystem('🟢 ' + j.nickname + ' 加入了房间');
+        }
+        for (const l of ev.left) {
+          this._toast('⚪ ' + l.nickname + ' 下线了');
+          this._appendChatSystem('⚪ ' + l.nickname + ' 离开了房间');
+        }
+      }
+    } catch (e) { /* 提示失败不影响联机 */ }
+  }
+
+  _setMpBadge(total) {
+    const badge = document.getElementById('mpBadge');
+    const codeEl = document.getElementById('mpBadgeCode');
+    const countEl = document.getElementById('mpBadgeCount');
+    if (!badge) return;
+    if (this.mp && this.mp.inRoom) {
+      badge.hidden = false;
+      if (codeEl) codeEl.textContent = this.mp.roomCode || '';
+      if (countEl) countEl.textContent = total + ' 人在线';
+    } else {
+      badge.hidden = true;
+    }
+  }
+
+  _showMpBanner(total, others) {
+    const banner = document.getElementById('mpBanner');
+    const codeEl = document.getElementById('mpBannerCode');
+    const peopleEl = document.getElementById('mpBannerPeople');
+    const copyBtn = document.getElementById('mpBannerCopy');
+    if (!banner) return;
+    if (codeEl) codeEl.textContent = this.mp ? this.mp.roomCode : '';
+    if (peopleEl) {
+      peopleEl.textContent = others > 0
+        ? ('已有 ' + others + ' 位小伙伴在房间里 · 共 ' + total + ' 人')
+        : ('你是第 1 位进入的 · 房间还可再来 3 位小伙伴');
+    }
+    banner.classList.remove('hide');
+    banner.hidden = false;
+    clearTimeout(this._mpBannerTimer);
+    this._mpBannerTimer = setTimeout(() => {
+      banner.classList.add('hide');
+      setTimeout(() => { banner.hidden = true; banner.classList.remove('hide'); }, 520);
+    }, 3200);
+  }
+
+  // 聊天记录里的系统提示（居中浅色小字）
+  _appendChatSystem(text) {
+    if (!this._chatLog) return;
+    const div = document.createElement('div');
+    div.className = 'chat-msg sys';
+    div.textContent = text;
+    this._chatLog.appendChild(div);
+    while (this._chatLog.children.length > 8) this._chatLog.removeChild(this._chatLog.firstChild);
+    this._chatLog.scrollTop = this._chatLog.scrollHeight;
   }
 
   // 收到队友对话：头顶气泡 + 聊天条留痕
@@ -2404,6 +2526,24 @@ class Game {
     this._chatInput.addEventListener('keyup', (e) => e.stopPropagation());
     if (sendBtn) sendBtn.addEventListener('click', (e) => { e.preventDefault(); this._commitChat(); });
     this._initVoiceChat();
+
+    // 多人徽章 / 横幅：点击复制房间号
+    const bindCopy = (el) => {
+      if (!el) return;
+      const copy = (e) => {
+        try {
+          e.preventDefault();
+          e.stopPropagation();
+        } catch (_) {}
+        if (!this.mp || !this.mp.inRoom || !this.mp.roomCode) return;
+        const ok = this._copyText(this.mp.roomCode);
+        if (ok) this._toast('✅ 房间号已复制：' + this.mp.roomCode);
+      };
+      el.addEventListener('click', copy);
+      ['pointerdown', 'mousedown', 'touchstart'].forEach((ev) => el.addEventListener(ev, (e) => e.stopPropagation()));
+    };
+    bindCopy(document.getElementById('mpBadge'));
+    bindCopy(document.getElementById('mpBannerCopy'));
   }
 
   // 语音转文字：浏览器自带 Web Speech API（Chrome / Edge / Safari 支持）
@@ -3324,6 +3464,7 @@ class Game {
       }
       if (this.remotePlayers) this.remotePlayers.update(dt);
       this._updateTeamPointer();
+      this._updateTeamRecall(dt);
 
       // 第三人称：环绕相机（可 360° 绕角色，相机始终看向角色身体）
       if (this.viewMode === 'third') {

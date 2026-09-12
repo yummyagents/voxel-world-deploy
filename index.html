@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
   <meta name="description" content="像素方块世界 - 3D像素风格方块世界探索游戏" />
   <title>美味特工队 · 像素方块训练基地</title>
-  <link rel="stylesheet" href="./styles/main.css?v=20260925af" />
+  <link rel="stylesheet" href="./styles/main.css?v=20260925ah" />
   <!-- 使用 importmap 引入 Three.js ES Module -->
   <script type="importmap">
   {
@@ -26,6 +26,24 @@
   <div id="teamPointer" class="team-pointer" title="点击传送到队友身边">
     <div class="tp-arrow"><span class="tp-tri"></span></div>
     <div class="tp-info"><span class="tp-name"></span><span class="tp-dist"></span></div>
+  </div>
+
+  <!-- 多人共建：常驻状态徽章（房间号 / 在线人数，点击复制房间号） -->
+  <div id="mpBadge" class="mp-badge" title="点击复制房间号" hidden>
+    <span class="mpb-dot"></span>
+    <span class="mpb-label">多人共建</span>
+    <span class="mpb-code" id="mpBadgeCode"></span>
+    <span class="mpb-count" id="mpBadgeCount">1 人在线</span>
+  </div>
+
+  <!-- 多人共建：进入房间时的欢迎横幅 -->
+  <div id="mpBanner" class="mp-banner" hidden>
+    <div class="mpb-card">
+      <div class="mpb-title">🌐 已进入多人共建世界</div>
+      <div class="mpb-room">房间号 <b id="mpBannerCode"></b><span id="mpBannerCopy" class="mpb-copy">复制</span></div>
+      <div class="mpb-people" id="mpBannerPeople"></div>
+      <div class="mpb-hint">和小伙伴一起搭建吧！走散了按 B 可传送到队友身边</div>
+    </div>
   </div>
 
   <!-- 多人共建：对话气泡聊天条（进入房间后显示） -->
@@ -182,7 +200,7 @@
           <div class="mp-title">多人共建</div>
           <div class="mp-subtitle">和小伙伴进同一个世界，一起搭方块！<span class="mp-cap-badge">每房最多 4 人</span></div>
         </div>
-        <span class="mp-badge" id="mpBadge">在线</span>
+        <span class="mp-online-pill" id="mpOnlineBadge" aria-hidden="true">在线</span>
       </div>
       <div class="mp-card-body">
         <div class="mp-field">
@@ -206,7 +224,7 @@
           <span id="mpCodeValue" class="mp-code-value">------</span>
           <button id="mpCopy" class="mp-copy" type="button">📋 复制</button>
         </div>
-        <div id="mpStatus" class="mp-status">点「创建新房间」拿到房间码，把码发给小伙伴；或输入小伙伴的房间码加入。大家放/拆的方块会实时同步，还能看到彼此的小特工！</div>
+        <div id="mpStatus" class="mp-status">想和小伙伴一起玩，就在这里「创建房间」或输入房码「加入」；不在这里操作、直接点下方「开始冒险」，就会进入只属于你自己的单机世界。</div>
         <div class="mp-steps">
           <span>① 填昵称</span><span>② 建房或输入房码</span><span>③ 点「开始冒险」一起搭</span>
         </div>
@@ -290,14 +308,14 @@
 
   <!-- 社区功能引导（开始界面的计数/点赞/留言） -->
   <script type="module">
-    import { Community } from './js/community.js?v=20260925af';
+    import { Community } from './js/community.js?v=20260925ah';
     try {
       const mount = document.getElementById('communityMount');
       if (mount) { const c = new Community(); c.mount(mount); }
     } catch (e) { console.warn('[community] 加载失败', e); }
   </script>
 
-  <script type="module" src="./js/game.js?v=20260925af"></script>
+  <script type="module" src="./js/game.js?v=20260925ah"></script>
 
   <!-- 兜底：模块若加载失败或卡住，给出可见提示而不是无限"生成世界中..." -->
   <script>

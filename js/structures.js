@@ -7,7 +7,7 @@
 // - 侧边一块小巧 WELCOME 木牌（不再是占满平台的大拱门）
 // - 小木屋 / 牧场 / 池塘凉亭 撤到东西外侧作配景，不进第一眼正中
 // 所有方块用 world.setBlockGen 写入（属于世界生成，不计入玩家改动存档）。
-import { BlockType, CHUNK_HEIGHT, SEA_LEVEL } from './voxel.js?v=20260925af';
+import { BlockType, CHUNK_HEIGHT, SEA_LEVEL } from './voxel.js?v=20260925ah';
 
 // 家园坐标中心（世界原点）。设计目标：一进世界眼前开阔，视线越过草地广场，
 // 尽头正中就是高大的樱花风车磨坊在转动；樱花退到广场两侧做"画框"，中轴走廊全留白。

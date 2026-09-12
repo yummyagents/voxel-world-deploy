@@ -2249,6 +2249,15 @@ body.admin-body { background: #0f1017; margin: 0; }
   border-color: rgba(244,107,149,0.75);
 }
 .chat-msg.me .chat-who { color: #ff9ec4; }
+.chat-msg.sys {
+  align-self: center;
+  background: rgba(10, 6, 0, 0.55);
+  border: 1px dashed rgba(244, 196, 107, 0.45);
+  color: #d8c49a;
+  font-size: 12px;
+  padding: 2px 10px;
+  text-align: center;
+}
 @keyframes chatIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
 .chat-row { display: flex; gap: 6px; }
 .chat-input {
@@ -2322,6 +2331,115 @@ body.admin-body { background: #0f1017; margin: 0; }
 @media (hover: hover) and (pointer: fine) {
   .team-pointer.show { pointer-events: auto; }
 }
+
+/* ========== 多人共建：常驻状态徽章 ========== */
+.mp-badge {
+  position: fixed;
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 240;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 14px;
+  background: rgba(20, 12, 4, 0.78);
+  border: 2px solid #f4c46b;
+  border-radius: 999px;
+  box-shadow: 0 0 0 2px rgba(20, 12, 4, 0.55), 0 4px 14px rgba(0, 0, 0, 0.4);
+  font-family: 'Courier New', monospace;
+  font-size: 13px;
+  color: #ffeec9;
+  cursor: pointer;
+  user-select: none;
+  white-space: nowrap;
+}
+.mp-badge:hover { background: rgba(38, 24, 8, 0.9); }
+.mpb-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: #57d98a;
+  box-shadow: 0 0 8px #57d98a;
+  animation: mpbPulse 1.6s ease-in-out infinite;
+  flex: 0 0 auto;
+}
+@keyframes mpbPulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.45; transform: scale(0.75); }
+}
+.mpb-label { color: #f4c46b; font-weight: bold; letter-spacing: 1px; }
+.mpb-code {
+  font-weight: bold;
+  font-size: 15px;
+  color: #fff;
+  background: rgba(244, 196, 107, 0.16);
+  border: 1px solid rgba(244, 196, 107, 0.5);
+  border-radius: 6px;
+  padding: 1px 8px;
+  letter-spacing: 2px;
+}
+.mpb-count { color: #bfe8c9; font-size: 12px; }
+
+/* ========== 多人共建：进房欢迎横幅 ========== */
+.mp-banner {
+  position: fixed;
+  inset: 0;
+  z-index: 320;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(10, 6, 0, 0.35);
+  pointer-events: none;
+}
+.mp-banner .mpb-card {
+  pointer-events: none;
+  text-align: center;
+  background: rgba(20, 12, 4, 0.92);
+  border: 3px solid #f4c46b;
+  box-shadow: 0 0 0 3px rgba(20, 12, 4, 0.6), 0 10px 40px rgba(0, 0, 0, 0.55);
+  border-radius: 16px;
+  padding: 22px 38px;
+  font-family: 'Courier New', monospace;
+  color: #ffeec9;
+  animation: mpbPop 0.35s cubic-bezier(0.2, 1.4, 0.4, 1);
+}
+@keyframes mpbPop {
+  from { transform: scale(0.8); opacity: 0; }
+  to { transform: scale(1); opacity: 1; }
+}
+.mp-banner.hide .mpb-card { opacity: 0; transform: translateY(-12px) scale(0.98); transition: opacity 0.5s, transform 0.5s; }
+.mpb-title { font-size: 20px; font-weight: bold; color: #f4c46b; letter-spacing: 1px; }
+.mpb-room { margin-top: 12px; font-size: 15px; color: #e9d6ad; }
+.mpb-room b {
+  font-size: 30px;
+  color: #fff;
+  letter-spacing: 5px;
+  margin: 0 8px;
+  text-shadow: 0 0 14px rgba(244, 196, 107, 0.7);
+}
+.mpb-copy {
+  font-size: 12px;
+  color: #f4c46b;
+  border: 1px solid #f4c46b;
+  border-radius: 6px;
+  padding: 1px 8px;
+  cursor: pointer;
+  pointer-events: auto;
+}
+.mpb-copy:hover { background: #f4c46b; color: #2a1a06; }
+.mpb-people { margin-top: 10px; font-size: 14px; color: #bfe8c9; min-height: 18px; }
+.mpb-hint { margin-top: 8px; font-size: 12px; color: #c9b58d; }
+
+@media (max-width: 700px) {
+  .mp-badge { top: 8px; padding: 5px 10px; gap: 6px; font-size: 11px; }
+  .mpb-code { font-size: 13px; letter-spacing: 1px; padding: 1px 6px; }
+  .mpb-count { font-size: 11px; }
+  .mp-banner .mpb-card { padding: 18px 22px; max-width: 86vw; }
+  .mpb-title { font-size: 17px; }
+  .mpb-room b { font-size: 24px; letter-spacing: 3px; }
+}
+
 @media (max-width: 700px) {
   .tp-arrow { width: 46px; height: 46px; margin: -23px 0 0 -23px; font-size: 22px; }
   .tp-name { font-size: 12px; }
@@ -2358,7 +2476,7 @@ body.admin-body { background: #0f1017; margin: 0; }
 }
 .mp-subtitle { font-size: 11.5px; color: rgba(255,255,255,.62); margin-top: 3px; letter-spacing: 1px; display:flex; align-items:center; gap:8px; flex-wrap:wrap; justify-content:center; }
 .mp-cap-badge { font-family: 'Courier New', monospace; font-size: 10px; font-weight:bold; color:#3a2405; background:linear-gradient(#fbe08b,#eab54d); border:2px solid #f6d27a; border-radius:8px; padding:1px 7px; box-shadow:0 2px 0 #a86b1e; white-space:nowrap; }
-.mp-badge {
+.mp-online-pill {
   flex: 0 0 auto;
   font-size: 11px;
   font-weight: bold;
@@ -2369,7 +2487,7 @@ body.admin-body { background: #0f1017; margin: 0; }
   border: 1px solid rgba(126, 226, 150, 0.5);
   letter-spacing: 1px;
 }
-.mp-badge::before { content: '●'; color: #7ee296; margin-right: 4px; font-size: 9px; vertical-align: middle; }
+.mp-online-pill::before { content: '●'; color: #7ee296; margin-right: 4px; font-size: 9px; vertical-align: middle; }
 .mp-card-body { padding: 14px 16px 15px; display: flex; flex-direction: column; gap: 12px; }
 .mp-field { display: flex; flex-direction: column; gap: 5px; }
 .mp-field label { font-size: 12px; font-weight: bold; color: #ffb3cf; letter-spacing: 2px; }
