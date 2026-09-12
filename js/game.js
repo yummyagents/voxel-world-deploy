@@ -8,32 +8,35 @@ import {
   World, Chunk, BlockType, BlockNames, isSolid,
   CHUNK_SIZE, CHUNK_HEIGHT, RENDER_DISTANCE, getBlockColor,
   isMobileDevice, getRenderDistance, getBlockDrop, BiomeNames, Biome,
-} from './voxel.js?v=20260925aa';
-import { Multiplayer } from './multiplayer.js?v=20260925aa';
-import { isCommunityEnabled } from './config.js?v=20260925aa';
-import { AnimalManager, Sheep, Rabbit, Horse, Cow, Pig, Chicken, Villager, IronGolem } from './animals.js?v=20260925aa';
-import { WeatherSystem, WeatherType, WeatherNames } from './weather.js?v=20260925aa';
-import { DayNightCycle } from './daynight.js?v=20260925aa';
-import { DropManager } from './drops.js?v=20260925aa';
-import { VillageGenerator } from './village.js?v=20260925aa';
-import { Inventory } from './inventory.js?v=20260925aa';
-import { ExchangeShop } from './exchange.js?v=20260925aa';
-import { createHeldModel, createArmModel, ItemNames, getItemIcon, AGENT_ARMS } from './equipment.js?v=20260925aa';
-import { StructureGenerator, PLAYER_SPAWN, SAKURA_ISLAND_X, SAKURA_ISLAND_Z } from './structures.js?v=20260925aa';
-import { PlayerCharacter } from './player-character.js?v=20260925aa';
-import { SakuraPetals } from './sakura.js?v=20260925aa';
-import { BirdManager, ButterflyManager } from './birds.js?v=20260925aa';
-import { WindmillBlades } from './windmill.js?v=20260925aa';
-import { WorldMap } from './world-map.js?v=20260925aa';
-import { Fireflies } from './fireflies.js?v=20260925aa';
-import { SoundFX } from './audio.js?v=20260925aa';
-import { Tutorial } from './tutorial.js?v=20260925aa';
+} from './voxel.js?v=20260925af';
+import { Multiplayer } from './multiplayer.js?v=20260925af';
+import { isCommunityEnabled } from './config.js?v=20260925af';
+import { AnimalManager, Sheep, Rabbit, Horse, Cow, Pig, Chicken, Villager, IronGolem } from './animals.js?v=20260925af';
+import { WeatherSystem, WeatherType, WeatherNames } from './weather.js?v=20260925af';
+import { DayNightCycle } from './daynight.js?v=20260925af';
+import { DropManager } from './drops.js?v=20260925af';
+import { VillageGenerator } from './village.js?v=20260925af';
+import { Inventory } from './inventory.js?v=20260925af';
+import { ExchangeShop } from './exchange.js?v=20260925af';
+import { createHeldModel, createArmModel, ItemNames, getItemIcon, AGENT_ARMS } from './equipment.js?v=20260925af';
+import { StructureGenerator, PLAYER_SPAWN, SAKURA_ISLAND_X, SAKURA_ISLAND_Z } from './structures.js?v=20260925af';
+import { PlayerCharacter } from './player-character.js?v=20260925af';
+import { SakuraPetals } from './sakura.js?v=20260925af';
+import { BirdManager, ButterflyManager } from './birds.js?v=20260925af';
+import { WindmillBlades } from './windmill.js?v=20260925af';
+import { WorldMap } from './world-map.js?v=20260925af';
+import { Fireflies } from './fireflies.js?v=20260925af';
+import { SoundFX } from './audio.js?v=20260925af';
+import { Tutorial } from './tutorial.js?v=20260925af';
 import {
   loadSave, writeSave, clearSave, hasSave,
   exportSave, importSave,
-} from './save.js?v=20260925aa';
-import { Portfolio } from './portfolio.js?v=20260925aa';
-import { buildFurnitureGroup } from './furniture.js?v=20260925aa';
+} from './save.js?v=20260925af';
+import { Portfolio } from './portfolio.js?v=20260925af';
+import { buildFurnitureGroup } from './furniture.js?v=20260925af';
+
+// 多人联机：队友超过该水平距离（格）时，屏幕边缘出现方向指引
+const TEAM_POINTER_SHOW_DIST = 40;
 
 /* ============================================
    玩家类 - 第一人称角色控制
@@ -717,13 +720,18 @@ class RemotePlayer {
     this.cur = new THREE.Vector3(info.x, info.y, info.z);
     this.targetYaw = info.yaw;
     this.yaw = info.yaw;
+    this.nickname = info.nickname || '小探险家';
     this.avatar = new PlayerCharacter(scene);
     this.avatar.setSkin(info.skin || 'burger');
     this.avatar.setVisible(true);
     this.avatar.group.visible = true;
     // 名字标签
-    this.label = this._makeLabel(THREE, info.nickname || '小探险家');
+    this.label = this._makeLabel(THREE, this.nickname);
     scene.add(this.label);
+    // 对话气泡
+    this.bubble = this._makeBubble(THREE);
+    scene.add(this.bubble);
+    this._bubbleUntil = 0;
     this._updateTransform(1);
   }
 
@@ -745,6 +753,84 @@ class RemotePlayer {
     return spr;
   }
 
+  _makeBubble(THREE) {
+    const cv = document.createElement('canvas');
+    cv.width = 512;
+    const tex = new THREE.CanvasTexture(cv);
+    tex.needsUpdate = true;
+    const spr = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, opacity: 0, depthTest: false }));
+    spr.renderOrder = 998;
+    spr.userData = { cv, tex };
+    spr.visible = false;
+    return spr;
+  }
+
+  _wrapText(ctx, text, maxW) {
+    const lines = [];
+    let line = '';
+    for (const ch of String(text)) {
+      if (ctx.measureText(line + ch).width > maxW && line) { lines.push(line); line = ch; }
+      else line += ch;
+    }
+    if (line) lines.push(line);
+    return lines.slice(0, 4); // 最多 4 行
+  }
+
+  say(text, durationMs) {
+    const { cv, tex } = this.bubble.userData;
+    const ctx = cv.getContext('2d');
+    ctx.clearRect(0, 0, cv.width, 512);
+    const PAD = 28, MAXW = cv.width - PAD * 2;
+    ctx.font = 'bold 42px "Microsoft YaHei", "PingFang SC", sans-serif';
+    const lines = this._wrapText(ctx, text, MAXW);
+    const lh = 54;
+    const boxH = lines.length * lh + PAD * 2;
+    const boxW = Math.max(...lines.map((l) => ctx.measureText(l).width)) + PAD * 2;
+    const x0 = (cv.width - boxW) / 2;
+    const y0 = 10;
+    // 气泡背景（米黄底 + 金边，呼应开始界面）
+    ctx.fillStyle = 'rgba(255,243,220,0.97)';
+    ctx.strokeStyle = '#e0983c';
+    ctx.lineWidth = 8;
+    this._roundRect(ctx, x0, y0, boxW, boxH, 22);
+    ctx.fill(); ctx.stroke();
+    // 底部小尾巴
+    ctx.beginPath();
+    ctx.moveTo(cv.width / 2 - 16, y0 + boxH - 2);
+    ctx.lineTo(cv.width / 2, y0 + boxH + 24);
+    ctx.lineTo(cv.width / 2 + 16, y0 + boxH - 2);
+    ctx.closePath();
+    ctx.fillStyle = 'rgba(255,243,220,0.97)';
+    ctx.fill();
+    ctx.strokeStyle = '#e0983c'; ctx.lineWidth = 8;
+    ctx.beginPath();
+    ctx.moveTo(cv.width / 2 - 16, y0 + boxH - 2);
+    ctx.lineTo(cv.width / 2, y0 + boxH + 22);
+    ctx.lineTo(cv.width / 2 + 16, y0 + boxH - 2);
+    ctx.stroke();
+    // 文字
+    ctx.fillStyle = '#3a2410';
+    ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+    lines.forEach((l, i) => ctx.fillText(l, cv.width / 2, y0 + PAD + i * lh));
+    tex.needsUpdate = true;
+    const w = Math.min(3.6, Math.max(1.6, boxW / 110));
+    // 画布为 512×512，气泡只占其中 boxW×boxH 区域，按比例缩放使实际世界尺寸正确
+    this.bubble.scale.set(w * boxW / 512, w * boxH / 512, 1);
+    this.bubble.material.opacity = 1;
+    this.bubble.visible = true;
+    this._bubbleUntil = performance.now() + (durationMs || 6000);
+  }
+
+  _roundRect(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.arcTo(x + w, y, x + w, y + h, r);
+    ctx.arcTo(x + w, y + h, x, y + h, r);
+    ctx.arcTo(x, y + h, x, y, r);
+    ctx.arcTo(x, y, x + w, y, r);
+    ctx.closePath();
+  }
+
   updateInfo(info) {
     this.target.set(info.x, info.y, info.z);
     this.targetYaw = info.yaw;
@@ -761,15 +847,27 @@ class RemotePlayer {
     this.avatar.group.position.set(this.cur.x, this.cur.y, this.cur.z);
     this.avatar.group.rotation.y = this.yaw + Math.PI;
     this.label.position.set(this.cur.x, this.cur.y + 2.1, this.cur.z);
+    this.bubble.position.set(this.cur.x, this.cur.y + 3.35, this.cur.z);
   }
 
-  update(dt) { this._updateTransform(Math.min(1, dt * 8)); }
+  update(dt) {
+    this._updateTransform(Math.min(1, dt * 8));
+    // 气泡到点淡出
+    if (this.bubble.visible) {
+      const remain = this._bubbleUntil - performance.now();
+      if (remain <= 0) { this.bubble.visible = false; this.bubble.material.opacity = 0; }
+      else if (remain < 800) { this.bubble.material.opacity = Math.max(0, remain / 800); }
+    }
+  }
 
   dispose(scene) {
     scene.remove(this.avatar.group);
     scene.remove(this.label);
+    scene.remove(this.bubble);
     if (this.label.material && this.label.material.map) this.label.material.map.dispose();
     if (this.label.material) this.label.material.dispose();
+    if (this.bubble.material && this.bubble.material.map) this.bubble.material.map.dispose();
+    if (this.bubble.material) this.bubble.material.dispose();
   }
 }
 
@@ -792,6 +890,24 @@ class RemotePlayers {
   }
   update(dt) { for (const rp of this.map.values()) rp.update(dt); }
   clear() { for (const rp of this.map.values()) rp.dispose(this.scene); this.map.clear(); }
+
+  /** 让指定队友的角色头顶冒出对话气泡 */
+  speak(pid, text, durationMs) {
+    const rp = this.map.get(pid);
+    if (rp) rp.say(text, durationMs);
+  }
+
+  /** 返回距离 (x,z) 最近的在线队友（水平距离），无队友时返回 null */
+  nearest(x, z) {
+    let best = null, bestD2 = Infinity;
+    for (const rp of this.map.values()) {
+      const dx = rp.cur.x - x, dz = rp.cur.z - z;
+      const d2 = dx * dx + dz * dz;
+      if (d2 < bestD2) { bestD2 = d2; best = rp; }
+    }
+    return best ? { rp, dist: Math.sqrt(bestD2) } : null;
+  }
+  get count() { return this.map.size; }
 }
 
 /* ============================================
@@ -838,6 +954,11 @@ class Game {
       loadingFill: document.getElementById('loadingFill'),
       controlsPanel: document.getElementById('controlsPanel'),
     };
+    this._teamPointerEl = document.getElementById('teamPointer');
+    if (this._teamPointerEl) {
+      this._teamPointerEl.addEventListener('click', (e) => { e.preventDefault(); this.teleportToTeammate(); });
+    }
+    this._initChatUI();
 
     // 热键栏 9 格由 inventory.js 控制（E 键打开创造背包配置）
     this.hotbarCount = 9;
@@ -1180,6 +1301,97 @@ class Game {
     this._toastTimer = setTimeout(() => el.classList.remove('show'), 1600);
   }
 
+  /**
+   * 健壮复制：优先现代 Clipboard API（需 HTTPS/用户手势），
+   * 不可用时降级到隐藏 textarea + execCommand，尽量保证一键复制可用。
+   * 返回 true=复制成功。
+   */
+  _copyText(text) {
+    if (!text) return false;
+    try {
+      if (navigator.clipboard && window.isSecureContext) {
+        // 同步路径无法 await，这里用 Promise 但调用方按"已发起"处理；
+        // 为兼容点击事件内立即给反馈，先走下面 execCommand 兜底更稳。
+      }
+    } catch (e) {}
+    try {
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      ta.setAttribute('readonly', '');
+      ta.style.position = 'fixed';
+      ta.style.top = '-9999px';
+      ta.style.left = '-9999px';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.focus();
+      ta.select();
+      ta.setSelectionRange(0, ta.value.length);
+      const ok = document.execCommand('copy');
+      document.body.removeChild(ta);
+      if (ok) return true;
+    } catch (e) {}
+    // 最后兜底：异步 Clipboard API（不阻塞）
+    try {
+      if (navigator.clipboard) {
+        navigator.clipboard.writeText(text).catch(() => {});
+      }
+    } catch (e) {}
+    return false;
+  }
+
+  /** 房间码 → 确定性正整数种子（同房所有人地形一致） */
+  _seedFromRoomCode(code) {
+    let h = 2166136261 >>> 0;
+    const s = String(code || 'ROOM');
+    for (let i = 0; i < s.length; i++) {
+      h ^= s.charCodeAt(i);
+      h = Math.imul(h, 16777619);
+    }
+    return (h >>> 0) + 1;
+  }
+
+  /** 多人进房成功后切换到"房间共享世界"：同房种子 + 出生家园 + 统一出生点 */
+  async _switchToRoomWorld(code) {
+    try {
+      this._mpRoomCode = code;
+      const seed = this._seedFromRoomCode(code);
+      this.worldSeed = seed;
+      this.world.reseed(seed);
+      // 共建世界：本人放/拆只上传房间，不写入本地单机存档（避免污染个人世界）
+      this.world._trackEdits = false;
+      // 远程玩家/挂起队列先清空，稍后由房间方块重新填充
+      this.remotePlayers.clear();
+
+      // 生成固定出生家园（不计入个人存档，也不会被当作共建方块上传）
+      let sx = PLAYER_SPAWN.x, sz = PLAYER_SPAWN.z, sy = PLAYER_SPAWN.y;
+      try {
+        const home = this.structures.decorateSpawn();
+        for (let cx = -3; cx <= 6; cx++) {
+          for (let cz = -4; cz <= 3; cz++) {
+            this.world.update(cx * 16 + 8, cz * 16 + 8);
+          }
+        }
+        await new Promise(r => setTimeout(r, 60));
+        const cleared = this.world.clearSpawnArea(Math.floor(home.spawnX), Math.floor(home.spawnZ));
+        this.world.update(Math.floor(home.spawnX), Math.floor(home.spawnZ));
+        sx = cleared.x; sz = cleared.z; sy = cleared.y + 2;
+      } catch (e) { console.warn('[mp] 出生家园生成失败，使用默认落点', e); }
+
+      // 统一落点：同房所有人都从出生家园同一位置开始
+      this._spawnX = sx; this._spawnY = sy; this._spawnZ = sz;
+      this.player.position.set(sx, sy, sz);
+      this.player.velocity.set(0, 0, 0);
+      this.player.yaw = 0;
+      this.player.pitch = 0;
+      // 清掉旧世界残留掉落物/动物
+      try { if (this.dropManager && this.dropManager.clear) this.dropManager.clear(); } catch (e) {}
+      try { if (this.animalManager && this.animalManager.dispose) this.animalManager.dispose(); } catch (e) {}
+      this._toast('🏠 已进入共建世界，和小伙伴在出生点会合吧！');
+    } catch (e) {
+      console.warn('[mp] 切换共建世界失败', e);
+    }
+  }
+
   /** 一键回到出生家园（防迷路/卡住）。传送到出生点并确保站在安全高度。 */
   /** 桌面端右上角“?”操作说明面板：点击收起/展开 */
   _initControlsPanel() {
@@ -1225,6 +1437,91 @@ class Game {
       try { if (document.pointerLockElement) document.exitPointerLock(); } catch (e) {}
       if (this.sound) { try { this.sound.click(); } catch (e) {} }
     }
+  }
+
+  /** 传送到距离最近的队友身边（多人联机防走散） */
+  teleportToTeammate() {
+    if (!this.isRunning || !this.player) return;
+    if (!this.mp || !this.mp.inRoom || !this.remotePlayers || this.remotePlayers.count === 0) {
+      this._toast('当前房间里还没有其他小伙伴哦');
+      return;
+    }
+    try {
+      const near = this.remotePlayers.nearest(this.player.position.x, this.player.position.z);
+      if (!near) { this._toast('找不到队友位置'); return; }
+      const rp = near.rp;
+      const tx = rp.cur.x, tz = rp.cur.z;
+      // 强制加载目标周围区块，避免读到未生成地形
+      for (let cx = -1; cx <= 1; cx++) {
+        for (let cz = -1; cz <= 1; cz++) this.world.update(tx + cx * 16, tz + cz * 16);
+      }
+      // 落在队友旁边 1.5 格，避免两个角色重叠被互相推开
+      let lx = tx + 1.5, lz = tz;
+      let y = rp.cur.y + 1;
+      try {
+        const surf = this.world.getSurfaceHeight(Math.floor(lx), Math.floor(lz));
+        if (typeof surf === 'number' && surf > 0) y = surf + 2;
+      } catch (e) {}
+      this.player.position.set(lx, y, lz);
+      this.player.velocity.set(0, 0, 0);
+      // 落在队友东侧，面朝 -Z 即朝向队友
+      this.player.yaw = 0;
+      if (typeof this.player.orbitYaw === 'number') this.player.orbitYaw = 0;
+      this.player.onGround = false;
+      if (this.playerChar) this.playerChar.group.position.set(lx, y + 0.25, lz);
+      this.world.update(lx, lz);
+      this._toast(`🧲 已传送到 ${rp.nickname} 身边（相距约 ${Math.round(near.dist)} 格）`);
+      if (this.sound) try { this.sound.click(); } catch (e) {}
+    } catch (e) {
+      console.warn('[传送队友失败]', e);
+      this._toast('传送失败，请再试一次');
+    }
+  }
+
+  /** 每帧更新"队友过远"边缘指引（多人联机） */
+  _updateTeamPointer() {
+    const el = this._teamPointerEl;
+    if (!el) return;
+    const active = !!(this.isRunning && this.mp && this.mp.inRoom && this.remotePlayers && this.remotePlayers.count > 0);
+    if (!active) {
+      if (el.classList.contains('show')) el.classList.remove('show');
+      document.querySelectorAll('.m-fn-team, .m-fn-chat').forEach((b) => { b.style.display = 'none'; });
+      this._setChatVisible(false);
+      return;
+    }
+
+    // 移动端⋯菜单里的"找队友/说话"按钮随联机状态显示；聊天条显示
+    document.querySelectorAll('.m-fn-team, .m-fn-chat').forEach((b) => { b.style.display = ''; });
+    if (this._chatDock && this._chatDock.style.display === 'none') this._setChatVisible(true);
+
+    const near = this.remotePlayers.nearest(this.player.position.x, this.player.position.z);
+    if (!near || near.dist <= TEAM_POINTER_SHOW_DIST) { el.classList.remove('show'); return; }
+
+    const rp = near.rp;
+    const yaw = (this.viewMode === 'third' && typeof this.player.orbitYaw === 'number') ? this.player.orbitYaw : this.player.yaw;
+    const dx = rp.cur.x - this.player.position.x;
+    const dz = rp.cur.z - this.player.position.z;
+    const len = Math.hypot(dx, dz) || 1;
+    const ux = dx / len, uz = dz / len;
+    // 相机前向 (-sin,-cos)、右向 (cos,-sin)；φ=0 正前方，>0 在右侧
+    const fDot = -ux * Math.sin(yaw) - uz * Math.cos(yaw);
+    const rDot = ux * Math.cos(yaw) - uz * Math.sin(yaw);
+    const phi = Math.atan2(rDot, fDot);
+    const deg = phi * 180 / Math.PI;
+
+    const Rx = Math.max(60, window.innerWidth / 2 - 52);
+    const Ry = Math.max(60, window.innerHeight / 2 - 70);
+    const ox = Math.sin(phi) * Rx;
+    const oy = -Math.cos(phi) * Ry;
+    const arrow = el.querySelector('.tp-arrow');
+    if (arrow) arrow.style.transform = `translate(${ox}px, ${oy}px) rotate(${deg}deg)`;
+    const info = el.querySelector('.tp-info');
+    if (info) info.style.transform = `translate(calc(-50% + ${ox}px), ${oy - 8}px)`;
+    const nameEl = el.querySelector('.tp-name');
+    const distEl = el.querySelector('.tp-dist');
+    if (nameEl) nameEl.textContent = rp.nickname;
+    if (distEl) distEl.textContent = `${Math.round(near.dist)} 格 · B键/点我传送`;
+    if (!el.classList.contains('show')) el.classList.add('show');
   }
 
   teleportHome() {
@@ -1630,16 +1927,23 @@ class Game {
       codeInput.addEventListener('keydown', (e) => { e.stopPropagation(); if (e.key === 'Enter') doJoin(); });
     }
     if (copyBtn && codeValue) {
-      copyBtn.addEventListener('click', async (e) => {
+      copyBtn.addEventListener('click', (e) => {
         e.stopPropagation();
         const code = codeValue.textContent || '';
-        try {
-          await navigator.clipboard.writeText(code);
+        const ok = this._copyText(code);
+        if (ok) {
           copyBtn.textContent = '✅ 已复制';
           setTimeout(() => { copyBtn.textContent = '📋 复制'; }, 1500);
-        } catch (err) {
-          // 剪贴板权限不可用时降级：选中房码文本
-          setStatus('复制失败，可以长按/选中房间码 ' + code + ' 手动复制给小伙伴。');
+        } else {
+          // 剪贴板 API 不可用（非 HTTPS / 老浏览器）：自动选中房码方便手动复制
+          try {
+            const range = document.createRange();
+            range.selectNodeContents(codeValue);
+            const sel = window.getSelection();
+            sel.removeAllRanges();
+            sel.addRange(range);
+          } catch (err) {}
+          setStatus('已选中房间码 ' + code + '，按 Ctrl/Cmd+C 复制给小伙伴。');
         }
       });
     }
@@ -1862,6 +2166,12 @@ class Game {
         case 'home':
           this.teleportHome();
           break;
+        case 'team':
+          this.teleportToTeammate();
+          break;
+        case 'chat':
+          this._toggleChatFocus();
+          break;
         case 'map':
           this._toggleWorldMap();
           break;
@@ -2057,7 +2367,150 @@ class Game {
       },
       presence: (list) => { try { this.remotePlayers.sync(list); } catch (e) {} },
       status: (msg) => { this._onMpStatus(msg); },
+      roomEnter: async (code) => { await this._switchToRoomWorld(code); },
+      chat: (msg) => { this._onTeammateChat(msg); },
     });
+  }
+
+  // 收到队友对话：头顶气泡 + 聊天条留痕
+  _onTeammateChat(msg) {
+    try { this.remotePlayers.speak(msg.pid, msg.text, 6500); } catch (e) {}
+    this._appendChatLog(msg.nickname, msg.text, false);
+    try { this.sound && this.sound.click && this.sound.click(); } catch (e) {}
+  }
+
+  // 自己发送对话
+  _sendChat(text) {
+    const t = String(text == null ? '' : text).trim().slice(0, 80);
+    if (!t || !this.mp || !this.mp.inRoom) return;
+    const ok = this.mp.sendChat(t);
+    if (ok) {
+      this._appendChatLog(this.mp.nickname || '我', t, true);
+      try { this.sound && this.sound.click && this.sound.click(); } catch (e) {}
+    }
+  }
+
+  // —— 多人聊天 UI ——
+  _initChatUI() {
+    this._chatDock = document.getElementById('chatDock');
+    this._chatLog = document.getElementById('chatLog');
+    this._chatInput = document.getElementById('chatInput');
+    const sendBtn = document.getElementById('chatSendBtn');
+    if (!this._chatDock || !this._chatInput) return;
+    this._chatInput.addEventListener('keydown', (e) => {
+      if (e.code === 'Enter') { e.preventDefault(); this._commitChat(); }
+      e.stopPropagation(); // 打字时不触发游戏键位（Esc 由全局输入框守卫负责失焦）
+    });
+    this._chatInput.addEventListener('keyup', (e) => e.stopPropagation());
+    if (sendBtn) sendBtn.addEventListener('click', (e) => { e.preventDefault(); this._commitChat(); });
+    this._initVoiceChat();
+  }
+
+  // 语音转文字：浏览器自带 Web Speech API（Chrome / Edge / Safari 支持）
+  _initVoiceChat() {
+    const micBtn = document.getElementById('chatMicBtn');
+    if (!micBtn) return;
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SR) {
+      // 浏览器不支持：麦克风按钮置灰并说明
+      micBtn.classList.add('unsupported');
+      micBtn.title = '当前浏览器不支持语音，换 Chrome / Edge / Safari，或直接打字';
+      micBtn.addEventListener('click', () => {
+        this._toast('这个浏览器不支持语音哦，换 Chrome/Edge/Safari 或直接打字');
+      });
+      return;
+    }
+    const rec = new SR();
+    rec.lang = 'zh-CN';
+    rec.interimResults = true;
+    rec.continuous = false;
+    this._voiceRec = rec;
+    this._voiceBase = '';      // 开始听之前输入框里已有的文字
+    this._voiceListening = false;
+
+    rec.onstart = () => {
+      this._voiceListening = true;
+      this._voiceBase = this._chatInput ? this._chatInput.value : '';
+      micBtn.classList.add('listening');
+      micBtn.textContent = '⏺';
+      this._toast('🎤 在听啦，慢慢说…');
+    };
+    rec.onresult = (ev) => {
+      let interim = '', finalText = '';
+      for (let i = ev.resultIndex; i < ev.results.length; i++) {
+        const r = ev.results[i];
+        if (r.isFinal) finalText += r[0].transcript;
+        else interim += r[0].transcript;
+      }
+      if (this._chatInput) {
+        this._chatInput.value = (this._voiceBase + finalText + interim).slice(0, 80);
+        if (finalText) this._voiceBase = (this._voiceBase + finalText).slice(0, 80);
+      }
+    };
+    rec.onerror = (ev) => {
+      if (ev.error === 'not-allowed' || ev.error === 'service-not-allowed') {
+        this._toast('没拿到麦克风权限，请在浏览器地址栏允许使用麦克风');
+      } else if (ev.error === 'no-speech') {
+        this._toast('没听到声音，再靠近一点说试试');
+      } else if (ev.error === 'network') {
+        this._toast('语音识别需要联网，请检查网络');
+      } else {
+        this._toast('语音识别没成功（' + ev.error + '），可以打字');
+      }
+    };
+    const stopUI = (autoSend) => {
+      if (!this._voiceListening) return;
+      this._voiceListening = false;
+      micBtn.classList.remove('listening');
+      micBtn.textContent = '🎤';
+      const text = (this._chatInput ? this._chatInput.value.trim() : '');
+      if (autoSend && text) this._commitChat(); // 说完自动发送
+      else if (this._chatInput) this._chatInput.focus();
+    };
+    rec.onend = () => stopUI(true);
+
+    micBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (!this.mp || !this.mp.inRoom) { this._toast('多人房间里才能说话哦'); return; }
+      if (this._voiceListening) { try { rec.stop(); } catch (_) {} return; }
+      try { rec.start(); } catch (_) {}
+    });
+    ['pointerdown', 'mousedown', 'touchstart'].forEach((ev) =>
+      micBtn.addEventListener(ev, (e) => e.stopPropagation()));
+  }
+
+  _commitChat() {
+    if (!this._chatInput) return;
+    const t = this._chatInput.value;
+    this._sendChat(t);
+    this._chatInput.value = '';
+    this._chatInput.blur(); // 发完回到游戏，恢复移动/视角
+  }
+
+  _setChatVisible(v) {
+    if (this._chatDock) this._chatDock.style.display = v ? 'flex' : 'none';
+  }
+
+  _appendChatLog(nickname, text, mine) {
+    if (!this._chatLog) return;
+    const div = document.createElement('div');
+    div.className = 'chat-msg' + (mine ? ' me' : '');
+    const who = document.createElement('span');
+    who.className = 'chat-who';
+    who.textContent = (nickname || '小探险家') + '：';
+    const body = document.createElement('span');
+    body.textContent = text; // textContent 防注入
+    div.appendChild(who); div.appendChild(body);
+    this._chatLog.appendChild(div);
+    while (this._chatLog.children.length > 8) this._chatLog.removeChild(this._chatLog.firstChild);
+  }
+
+  _toggleChatFocus() {
+    if (!this.mp || !this.mp.inRoom) { this._toast('多人房间里才能聊天哦'); return; }
+    if (!this._chatInput) return;
+    if (document.activeElement === this._chatInput) this._chatInput.blur();
+    else this._chatInput.focus();
   }
 
   // 多人状态提示：开始界面时写到面板，游戏内用 toast
@@ -2547,6 +3000,20 @@ class Game {
         e.preventDefault();
         this._toggleWorldMap();
       }
+
+      // B 键：多人联机时一键传送到最近队友身边
+      if (e.code === 'KeyB' && !e.ctrlKey && !e.metaKey) {
+        this.teleportToTeammate();
+      }
+
+      // Enter 键：多人联机时聚焦/发送聊天
+      if (e.code === 'Enter') {
+        if (this.mp && this.mp.inRoom) {
+          e.preventDefault();
+          if (document.activeElement === this._chatInput) this._commitChat();
+          else this._toggleChatFocus();
+        }
+      }
     });
 
     document.addEventListener('keyup', (e) => {
@@ -2856,6 +3323,7 @@ class Game {
         this.mp.updatePos(this.player.position.x, this.player.position.y, this.player.position.z, yawForMp);
       }
       if (this.remotePlayers) this.remotePlayers.update(dt);
+      this._updateTeamPointer();
 
       // 第三人称：环绕相机（可 360° 绕角色，相机始终看向角色身体）
       if (this.viewMode === 'third') {

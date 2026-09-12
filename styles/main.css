@@ -2133,6 +2133,199 @@ body.admin-body { background: #0f1017; margin: 0; }
 }
 .inv-reset-btn:hover { background: #d2457a; color: #fff; }
 
+/* ============ 多人联机：队友过远边缘指引 ============ */
+.team-pointer {
+  position: fixed;
+  left: 50%; top: 50%;
+  width: 0; height: 0;
+  z-index: 240;
+  display: none;
+  pointer-events: none;
+  user-select: none;
+  cursor: pointer;
+}
+.team-pointer.show {
+  display: block;
+  animation: tp-fade-in 0.25s ease-out;
+}
+@keyframes tp-fade-in { from { opacity: 0; } to { opacity: 1; } }
+
+.tp-arrow {
+  position: absolute;
+  left: 0; top: 0;
+  width: 54px; height: 54px;
+  margin: -27px 0 0 -27px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 26px;
+  color: #fff;
+  background: radial-gradient(circle at 50% 40%, rgba(244,107,149,0.95), rgba(210,69,122,0.88));
+  border: 3px solid #f4c46b;
+  box-shadow: 0 0 0 3px rgba(20,12,4,0.55), 0 0 18px rgba(244,107,149,0.85);
+}
+.tp-tri {
+  width: 0; height: 0;
+  border-left: 11px solid transparent;
+  border-right: 11px solid transparent;
+  border-bottom: 19px solid #fff;
+  filter: drop-shadow(0 2px 2px rgba(0,0,0,0.45));
+  margin-top: -8px;
+  animation: tp-pulse 1.1s ease-in-out infinite;
+}
+@keyframes tp-pulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.18); }
+}
+.tp-arrow::after {
+  content: '';
+  position: absolute;
+  inset: -9px;
+  border-radius: 50%;
+  border: 2px dashed rgba(244,196,107,0.65);
+}
+
+.tp-info {
+  position: absolute;
+  left: 0; top: 30px;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  white-space: nowrap;
+  font-family: 'Courier New', monospace;
+  pointer-events: none;
+}
+.tp-name {
+  background: rgba(20,12,4,0.85);
+  color: #ffd9ec;
+  border: 2px solid rgba(244,196,107,0.85);
+  border-radius: 8px;
+  padding: 2px 10px 3px;
+  font-size: 13px;
+  font-weight: bold;
+  line-height: 1.3;
+}
+
+/* ============ 多人共建：对话气泡聊天条 ============ */
+.chat-dock {
+  position: fixed;
+  left: 14px;
+  bottom: 12px;
+  width: 300px;
+  z-index: 235;
+  display: none;
+  flex-direction: column;
+  gap: 6px;
+  pointer-events: auto;
+}
+.chat-log {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  max-height: 132px;
+  overflow: hidden;
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 22px);
+          mask-image: linear-gradient(to bottom, transparent 0, #000 22px);
+}
+.chat-msg {
+  align-self: flex-start;
+  max-width: 92%;
+  background: rgba(20,12,4,0.72);
+  border: 2px solid rgba(244,196,107,0.55);
+  border-radius: 10px;
+  padding: 4px 10px;
+  font-size: 13px;
+  line-height: 1.4;
+  color: #fff6e6;
+  word-break: break-word;
+  animation: chatIn 0.18s ease-out;
+}
+.chat-msg .chat-who { color: #f4c46b; font-weight: bold; margin-right: 5px; }
+.chat-msg.me {
+  align-self: flex-end;
+  background: rgba(244,107,149,0.22);
+  border-color: rgba(244,107,149,0.75);
+}
+.chat-msg.me .chat-who { color: #ff9ec4; }
+@keyframes chatIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+.chat-row { display: flex; gap: 6px; }
+.chat-input {
+  flex: 1;
+  min-width: 0;
+  background: rgba(10,6,0,0.62);
+  border: 2px solid rgba(244,196,107,0.7);
+  border-radius: 8px;
+  color: #fff6e6;
+  font-family: 'Courier New', "Microsoft YaHei", monospace;
+  font-size: 13px;
+  padding: 7px 10px;
+  outline: none;
+}
+.chat-input::placeholder { color: rgba(255,236,200,0.55); }
+.chat-input:focus { border-color: #f4c46b; box-shadow: 0 0 8px rgba(244,196,107,0.5); }
+.chat-send {
+  flex: none;
+  background: rgba(224,152,60,0.92);
+  color: #2a1808;
+  border: 2px solid #f4c46b;
+  border-radius: 8px;
+  font-family: 'Courier New', "Microsoft YaHei", monospace;
+  font-weight: bold;
+  font-size: 13px;
+  padding: 6px 12px;
+  cursor: pointer;
+}
+.chat-send:active { transform: translateY(1px); }
+.chat-mic {
+  flex: none;
+  width: 34px; height: 34px;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: rgba(244,107,149,0.18);
+  color: #ff9ec2;
+  border: 2px solid #f46b95;
+  border-radius: 8px;
+  font-size: 16px;
+  cursor: pointer;
+  transition: background .15s, box-shadow .15s;
+}
+.chat-mic:active { transform: translateY(1px); }
+.chat-mic.listening {
+  background: #f46b95;
+  color: #fff;
+  animation: micPulse 1s ease-in-out infinite;
+  box-shadow: 0 0 12px rgba(244,107,149,0.8);
+}
+.chat-mic.unsupported { opacity: 0.35; filter: grayscale(1); }
+@keyframes micPulse {
+  0%, 100% { box-shadow: 0 0 6px rgba(244,107,149,0.6); }
+  50% { box-shadow: 0 0 16px rgba(244,107,149,1); }
+}
+@media (max-width: 640px) {
+  .chat-dock { width: 58vw; left: 8px; bottom: 8px; gap: 4px; }
+  .chat-log { max-height: 84px; }
+  .chat-msg { font-size: 12px; padding: 3px 8px; }
+  .chat-input { font-size: 12px; padding: 6px 8px; }
+  .chat-send { font-size: 12px; padding: 5px 10px; }
+  .chat-mic { width: 30px; height: 30px; font-size: 14px; }
+}
+.tp-dist {
+  margin-top: 3px;
+  background: rgba(20,12,4,0.75);
+  color: #f4c46b;
+  border-radius: 6px;
+  padding: 1px 8px 2px;
+  font-size: 11px;
+}
+/* 可点击时（桌面端）打开命中 */
+@media (hover: hover) and (pointer: fine) {
+  .team-pointer.show { pointer-events: auto; }
+}
+@media (max-width: 700px) {
+  .tp-arrow { width: 46px; height: 46px; margin: -23px 0 0 -23px; font-size: 22px; }
+  .tp-name { font-size: 12px; }
+}
 /* ===== 多人共建面板（与开始界面深色毛玻璃风统一） ===== */
 #startScreen .mp-card { width: 100%; max-width: 560px; box-sizing: border-box; }
 .mp-card {
@@ -2163,7 +2356,8 @@ body.admin-body { background: #0f1017; margin: 0; }
   color: #ffd9ec;
   text-shadow: 0 0 10px rgba(244,107,149,.55), 0 2px 4px rgba(0,0,0,.6);
 }
-.mp-subtitle { font-size: 11.5px; color: rgba(255,255,255,.62); margin-top: 3px; letter-spacing: 1px; }
+.mp-subtitle { font-size: 11.5px; color: rgba(255,255,255,.62); margin-top: 3px; letter-spacing: 1px; display:flex; align-items:center; gap:8px; flex-wrap:wrap; justify-content:center; }
+.mp-cap-badge { font-family: 'Courier New', monospace; font-size: 10px; font-weight:bold; color:#3a2405; background:linear-gradient(#fbe08b,#eab54d); border:2px solid #f6d27a; border-radius:8px; padding:1px 7px; box-shadow:0 2px 0 #a86b1e; white-space:nowrap; }
 .mp-badge {
   flex: 0 0 auto;
   font-size: 11px;

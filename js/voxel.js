@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { SimplexNoise } from './noise.js?v=20260925aa';
+import { SimplexNoise } from './noise.js?v=20260925af';
 
 /* ============================================
    常量
@@ -2004,6 +2004,42 @@ export class World {
     for (const key of Object.keys(data)) {
       this.edits.set(key, data[key].map((e) => (typeof e[2] === 'number' ? [e[0], e[1], e[2]] : [e[0], e[1]])));
     }
+  }
+
+  /**
+   * 原地切换世界种子并清空已生成区块（多人共建用：同一房间所有人用相同的
+   * 房间码派生种子，保证地形完全一致）。保留材质与所有外部引用（this 不变）。
+   */
+  reseed(seed) {
+    // 卸载旧区块的网格与家具
+    for (const chunk of this.chunks.values()) {
+      try {
+        if (chunk.solidMesh) { this.scene.remove(chunk.solidMesh); }
+        if (chunk.waterMesh) { this.scene.remove(chunk.waterMesh); }
+        if (chunk.crossMesh) { this.scene.remove(chunk.crossMesh); }
+        if (chunk.glassMesh) { this.scene.remove(chunk.glassMesh); }
+        if (this._removeChunkFurniture) this._removeChunkFurniture(chunk);
+      } catch (e) {}
+    }
+    this.chunks.clear();
+    this.pendingChunks.length = 0;
+    this._dirtyPriority.clear();
+    this._dirtyNormal.clear();
+    if (this._remotePending) this._remotePending.clear();
+    this.villages = [];
+    // 清空本地改动：共建世界以服务器房间方块为准，不读个人存档
+    this.edits.clear();
+    // 用新种子重建全部噪声
+    this.seed = seed;
+    this.noise = new SimplexNoise(seed);
+    this.treeNoise = new SimplexNoise(seed + 777);
+    this.tempNoise = new SimplexNoise(seed + 1234);
+    this.humidNoise = new SimplexNoise(seed + 5678);
+    this.continentNoise = new SimplexNoise(seed + 9999);
+    this.cherryNoise = new SimplexNoise(seed + 4242);
+    this.oreNoise = new SimplexNoise(seed + 31337);
+    this.terraceNoise = new SimplexNoise(seed + 20240);
+    this.flatNoise = new SimplexNoise(seed + 8881);
   }
 
   init() {

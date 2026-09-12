@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
   <meta name="description" content="像素方块世界 - 3D像素风格方块世界探索游戏" />
   <title>美味特工队 · 像素方块训练基地</title>
-  <link rel="stylesheet" href="./styles/main.css?v=20260925aa" />
+  <link rel="stylesheet" href="./styles/main.css?v=20260925af" />
   <!-- 使用 importmap 引入 Three.js ES Module -->
   <script type="importmap">
   {
@@ -21,6 +21,23 @@
 
   <!-- 十字准星 -->
   <div id="crosshair">+</div>
+
+  <!-- 多人联机：队友过远时屏幕边缘方向指引（点击可一键传送到队友身边） -->
+  <div id="teamPointer" class="team-pointer" title="点击传送到队友身边">
+    <div class="tp-arrow"><span class="tp-tri"></span></div>
+    <div class="tp-info"><span class="tp-name"></span><span class="tp-dist"></span></div>
+  </div>
+
+  <!-- 多人共建：对话气泡聊天条（进入房间后显示） -->
+  <div id="chatDock" class="chat-dock">
+    <div id="chatLog" class="chat-log"></div>
+    <div class="chat-row">
+      <input id="chatInput" class="chat-input" type="text" maxlength="80"
+             placeholder="说点什么…（回车发送）" autocomplete="off" />
+      <button id="chatMicBtn" class="chat-mic" type="button" title="点一下说话，自动转成文字" aria-label="语音说话">🎤</button>
+      <button id="chatSendBtn" class="chat-send" type="button">发送</button>
+    </div>
+  </div>
 
   <!-- 当前选中方块名称提示 -->
   <div id="selectedBlockName">草地</div>
@@ -163,7 +180,7 @@
         <span class="mp-globe" aria-hidden="true">🌐</span>
         <div class="mp-head-text">
           <div class="mp-title">多人共建</div>
-          <div class="mp-subtitle">和小伙伴进同一个世界，一起搭方块！</div>
+          <div class="mp-subtitle">和小伙伴进同一个世界，一起搭方块！<span class="mp-cap-badge">每房最多 4 人</span></div>
         </div>
         <span class="mp-badge" id="mpBadge">在线</span>
       </div>
@@ -217,6 +234,8 @@
       <div class="control-row"><span class="key">C</span><span>拍照存进作品集</span></div>
       <div class="control-row"><span class="key">P</span><span>打开作品集相册</span></div>
       <div class="control-row"><span class="key">H</span><span>关闭/重开新手任务提示</span></div>
+      <div class="control-row"><span class="key">B</span><span>多人联机：队友过远时一键传送到队友身边（也可点屏幕边缘的粉色箭头）</span></div>
+      <div class="control-row"><span class="key">Enter / 🎤</span><span>多人联机：回车打字发送，或点🎤说一句话自动转文字，队友角色头顶会冒出对话小气泡</span></div>
       <div class="control-row"><span class="key">F</span><span>小彩蛋（试试看～）</span></div>
       <div class="control-row"><span class="key">Ctrl+S</span><span>💾 立即手动保存（游戏也会自动保存）</span></div>
       <div class="control-row"><span class="key">ESC</span><span>暂停</span></div>
@@ -254,6 +273,8 @@
       <button class="m-fn" data-fn="view" type="button">👁️<span>视角</span></button>
       <button class="m-fn" data-fn="fly" type="button">🕊️<span>飞行</span></button>
       <button class="m-fn" data-fn="home" type="button">🏠<span>回家</span></button>
+      <button class="m-fn m-fn-team" data-fn="team" type="button" style="display:none;">🧲<span>找队友</span></button>
+      <button class="m-fn m-fn-chat" data-fn="chat" type="button" style="display:none;">💬<span>说话</span></button>
       <button class="m-fn" data-fn="map" type="button">🗺️<span>地图</span></button>
       <button class="m-fn" data-fn="weather" type="button">🌦️<span>天气</span></button>
       <button class="m-fn" data-fn="help" type="button">❓<span>说明</span></button>
@@ -269,14 +290,14 @@
 
   <!-- 社区功能引导（开始界面的计数/点赞/留言） -->
   <script type="module">
-    import { Community } from './js/community.js?v=20260925aa';
+    import { Community } from './js/community.js?v=20260925af';
     try {
       const mount = document.getElementById('communityMount');
       if (mount) { const c = new Community(); c.mount(mount); }
     } catch (e) { console.warn('[community] 加载失败', e); }
   </script>
 
-  <script type="module" src="./js/game.js?v=20260925aa"></script>
+  <script type="module" src="./js/game.js?v=20260925af"></script>
 
   <!-- 兜底：模块若加载失败或卡住，给出可见提示而不是无限"生成世界中..." -->
   <script>

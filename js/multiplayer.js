@@ -1,7 +1,7 @@
 // multiplayer.js —— 多人联机同步（浏览器直连 Supabase）
 // 负责：创建/加入房间、拉取共建方块、Realtime 实时同步放拆与玩家现身。
 // 未配置 Supabase 或库未加载时自动禁用，不影响单机游戏。
-import { SUPABASE_URL, SUPABASE_ANON_KEY, isCommunityEnabled } from './config.js?v=20260925aa';
+import { SUPABASE_URL, SUPABASE_ANON_KEY, isCommunityEnabled } from './config.js?v=20260925af';
 
 const PID_KEY = 'voxel_mp_pid_v1';
 const NAME_KEY = 'voxel_mp_name_v1';
@@ -19,12 +19,16 @@ function genPlayerId() {
 }
 
 export class Multiplayer {
+  // 每个房间最多同时在线人数（凭 Realtime presence 在进房时校验）
+  static get ROOM_MAX_PLAYERS() { return 4; }
+
   constructor() {
     this.client = null;
     this.ok = false;
     this.enabled = false;
     this.inRoom = false;
     this.roomCode = null;
+    this.joinAt = 0;
     this.playerId = genPlayerId();
     this.nickname = localStorage.getItem(NAME_KEY) || '';
     this.skin = 'burger';
@@ -33,7 +37,8 @@ export class Multiplayer {
     this.touchTimer = null;
     this.pos = { x: 0, y: 0, z: 0, yaw: 0 };
     this._mine = new Map(); // 刚发送的编辑 key -> 时间戳，用于跳过自己的回声
-    this.cb = { edit: null, presence: null, status: null };
+    this._acceptEdits = false; // 切换到房间世界完成后才接受实时方块
+    this.cb = { edit: null, presence: null, status: null, roomEnter: null, chat: null };
   }
 
   setNickname(n) { this.nickname = (n || '').trim().slice(0, 12) || '小探险家'; localStorage.setItem(NAME_KEY, this.nickname); }
@@ -103,7 +108,7 @@ export class Multiplayer {
     return (await this.joinRoom(code)) ? code : null;
   }
 
-  /** 加入房间：拉取已有方块并订阅实时。成功 true。 */
+  /** 加入房间：校验未满 → 拉取已有方块 → 订阅实时并现身。成功 true。 */
   async joinRoom(rawCode) {
     if (!this._initClient()) return false;
     const code = (rawCode || '').trim().toUpperCase();
@@ -118,19 +123,113 @@ export class Multiplayer {
     // 刷新活动时间
     this.client.from('mp_worlds').update({ touched_at: new Date().toISOString() }).eq('code', code);
 
-    // 拉取本世界已有方块改动（分页，每页 1000）
+    // 1) 先连入房间频道（暂不现身 track），用于清点当前人数
+    let ch;
+    try {
+      ch = await this._openChannel(code);
+    } catch (e) {
+      this._status('连接房间失败，网络好像不太顺，等会儿再试。');
+      return false;
+    }
+
+    // 2) 等 presence 收敛后清点现有成员（自己尚未 track，不会被计入）
+    await new Promise((r) => setTimeout(r, 650));
+    const occupants = this._presencePids(ch);
+    if (occupants.size >= Multiplayer.ROOM_MAX_PLAYERS) {
+      try { await this.client.removeChannel(ch); } catch (e) {}
+      this._status('房间 ' + code + ' 已满（最多 ' + Multiplayer.ROOM_MAX_PLAYERS + ' 人），换个房间或稍后再试吧。');
+      return false;
+    }
+
+    // 3) 拉取本世界已有方块改动（分页，每页 900）
     const edits = await this._loadEdits(code);
     this.roomCode = code;
     this.inRoom = true;
+    this.joinAt = Date.now();
+    this._acceptEdits = false;
     this._mine.clear();
+
+    // 进房确认后、应用房间方块前：让游戏切换成"同房共享世界"（统一种子/出生点）
+    if (this.cb.roomEnter) { try { await this.cb.roomEnter(code); } catch (e) { console.warn('[mp] roomEnter hook', e); } }
 
     // 先把已有共建内容交给游戏应用
     if (this.cb.edit) for (const r of edits) this.cb.edit(r, true);
+    this._acceptEdits = true;
 
-    // 订阅实时：方块 postgres_changes + 玩家 presence（同一频道）
-    this._subscribe(code);
-    this._status('已进入房间 ' + code + '，和小伙伴一起搭吧！');
+    // 4) 正式现身（track）+ 周期上报位置
+    this.channel = ch;
+    ch.track({ pid: this.playerId, nickname: this.nickname, skin: this.skin,
+      x: this.pos.x, y: this.pos.y, z: this.pos.z, yaw: this.pos.yaw, joinedAt: this.joinAt });
+    if (this.presenceTimer) clearInterval(this.presenceTimer);
+    this.presenceTimer = setInterval(() => {
+      if (!this.channel) return;
+      this.channel.track({ pid: this.playerId, nickname: this.nickname, skin: this.skin,
+        x: this.pos.x, y: this.pos.y, z: this.pos.z, yaw: this.pos.yaw, joinedAt: this.joinAt });
+    }, 1200);
+
+    const total = occupants.size + 1;
+    this._status('已进入房间 ' + code + '（' + total + '/' + Multiplayer.ROOM_MAX_PLAYERS + ' 人），和小伙伴一起搭吧！');
     return true;
+  }
+
+  /** 统计频道内已现身的不同玩家 pid（不含自己）。 */
+  _presencePids(ch) {
+    const set = new Set();
+    try {
+      const state = ch.presenceState ? ch.presenceState() : {};
+      for (const key in state) {
+        for (const p of state[key]) {
+          if (p && p.pid && p.pid !== this.playerId) set.add(p.pid);
+        }
+      }
+    } catch (e) { /* presence 尚未就绪按 0 人处理 */ }
+    return set;
+  }
+
+  /** 打开并绑定房间频道（方块/现身/聊天），resolve 于 SUBSCRIBED，此时还未 track。 */
+  _openChannel(code) {
+    return new Promise((resolve, reject) => {
+      if (this.channel) { try { this.client.removeChannel(this.channel); } catch (e) {} this.channel = null; }
+      const ch = this.client.channel('room-' + code, {
+        config: { presence: { key: this.playerId } },
+      });
+
+      // 方块增/改（同一格 upsert；进房切换世界前先忽略，避免写进单机世界）
+      ch.on('postgres_changes',
+        { event: '*', schema: 'public', table: 'mp_edits', filter: 'world_code=eq.' + code },
+        (payload) => {
+          if (!this._acceptEdits) return;
+          const r = payload.new;
+          if (!r) return;
+          const key = r.bx + ',' + r.by + ',' + r.bz;
+          const mine = this._mine.get(key);
+          if (mine && (Date.now() - mine) < 8000) { this._mine.delete(key); return; } // 跳过自己的回声
+          if (r.pid === this.playerId) return;
+          if (this.cb.edit) this.cb.edit(r, false);
+        });
+
+      // 玩家现身
+      ch.on('presence', { event: 'sync' }, () => this._emitPresence(ch));
+      ch.on('presence', { event: 'join' }, () => this._emitPresence(ch));
+      ch.on('presence', { event: 'leave' }, () => this._emitPresence(ch));
+
+      // 对话气泡（广播消息，不入库；跳过自己回声）
+      ch.on('broadcast', { event: 'chat' }, ({ payload }) => {
+        if (!payload || payload.pid === this.playerId) return;
+        if (this.cb.chat) this.cb.chat({
+          pid: payload.pid, nickname: payload.nickname || '小探险家',
+          text: String(payload.text || '').slice(0, 80),
+        });
+      });
+
+      let settled = false;
+      ch.subscribe((status) => {
+        if (status === 'SUBSCRIBED' && !settled) { settled = true; resolve(ch); }
+        else if ((status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') && !settled) {
+          settled = true; reject(new Error(status));
+        }
+      });
+    });
   }
 
   async _loadEdits(code) {
@@ -147,46 +246,6 @@ export class Multiplayer {
       if (data.length < page) break;
     }
     return all;
-  }
-
-  _subscribe(code) {
-    if (this.channel) { try { this.client.removeChannel(this.channel); } catch (e) {} this.channel = null; }
-    const ch = this.client.channel('room-' + code, {
-      config: { presence: { key: this.playerId } },
-    });
-
-    // 方块增/改（同一格 upsert，收到 INSERT 或 UPDATE 都是新值）
-    ch.on('postgres_changes',
-      { event: '*', schema: 'public', table: 'mp_edits', filter: 'world_code=eq.' + code },
-      (payload) => {
-        const r = payload.new;
-        if (!r) return;
-        const key = r.bx + ',' + r.by + ',' + r.bz;
-        const mine = this._mine.get(key);
-        if (mine && (Date.now() - mine) < 8000) { this._mine.delete(key); return; } // 跳过自己的回声
-        if (r.pid === this.playerId) return;
-        if (this.cb.edit) this.cb.edit(r, false);
-      });
-
-    // 玩家现身
-    ch.on('presence', { event: 'sync' }, () => this._emitPresence(ch));
-    ch.on('presence', { event: 'join' }, () => this._emitPresence(ch));
-    ch.on('presence', { event: 'leave' }, () => this._emitPresence(ch));
-
-    ch.subscribe((status) => {
-      if (status === 'SUBSCRIBED') {
-        ch.track({ pid: this.playerId, nickname: this.nickname, skin: this.skin,
-          x: this.pos.x, y: this.pos.y, z: this.pos.z, yaw: this.pos.yaw });
-        // 每 1.2s 上报自己位置
-        if (this.presenceTimer) clearInterval(this.presenceTimer);
-        this.presenceTimer = setInterval(() => {
-          if (!this.channel) return;
-          this.channel.track({ pid: this.playerId, nickname: this.nickname, skin: this.skin,
-            x: this.pos.x, y: this.pos.y, z: this.pos.z, yaw: this.pos.yaw });
-        }, 1200);
-      }
-    });
-    this.channel = ch;
   }
 
   _emitPresence(ch) {
@@ -219,6 +278,20 @@ export class Multiplayer {
 
   /** 每帧/移动时更新本地坐标（由 presence 定时上报） */
   updatePos(x, y, z, yaw) { this.pos = { x, y, z, yaw }; }
+
+  /** 发送一句话对话（广播，不存数据库） */
+  sendChat(rawText) {
+    if (!this.inRoom || !this.channel) return false;
+    const text = String(rawText == null ? '' : rawText).trim().slice(0, 80);
+    if (!text) return false;
+    try {
+      this.channel.send({
+        type: 'broadcast', event: 'chat',
+        payload: { pid: this.playerId, nickname: this.nickname, text },
+      });
+      return true;
+    } catch (e) { console.warn('[mp] 发送对话失败', e); return false; }
+  }
 
   leave() {
     this.inRoom = false;
