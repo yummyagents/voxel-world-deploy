@@ -98,4 +98,84 @@ begin
   end;
 end$$;
 
+-- 5) 在线心跳表（不依赖 WebSocket 的"看到彼此"保险通道） ------------------
+--     每个房间每个玩家一行，进房写入、游戏中每 ~1.2s 刷新 last_seen；
+--     last_seen 超过 15 秒视为离线。用于 Realtime presence 被网络拦截时，
+--     仍能通过普通 HTTPS 请求看到同房间的小伙伴。
+create table if not exists public.mp_presence (
+  world_code  text not null,
+  pid         text not null,
+  nickname    text not null default '小探险家',
+  skin        text not null default 'burger',
+  x           real not null default 0,
+  y           real not null default 0,
+  z           real not null default 0,
+  yaw         real not null default 0,
+  pose        text not null default 'stand',
+  last_seen   timestamptz not null default now(),
+  primary key (world_code, pid)
+);
+create index if not exists idx_mp_presence_seen on public.mp_presence (world_code, last_seen desc);
+
+alter table public.mp_presence enable row level security;
+
+drop policy if exists mp_presence_select_public on public.mp_presence;
+create policy mp_presence_select_public
+  on public.mp_presence for select
+  to anon, authenticated
+  using (true);
+
+drop policy if exists mp_presence_write_public on public.mp_presence;
+create policy mp_presence_write_public
+  on public.mp_presence for all
+  to anon, authenticated
+  using (true) with check (char_length(world_code) between 4 and 10);
+
+-- 心跳 RPC：刷新自己的在线状态 + 清理本房间过期记录 + 返回当前在线名单。
+-- 用一个请求完成"上报 + 拉名单"，SECURITY DEFINER 以便 DELETE 过期行。
+create or replace function public.mp_heartbeat(
+  p_code text, p_pid text, p_nickname text default '小探险家',
+  p_skin text default 'burger', p_x real default 0, p_y real default 0,
+  p_z real default 0, p_yaw real default 0, p_pose text default 'stand'
+)
+returns table (pid text, nickname text, skin text, x real, y real, z real, yaw real, pose text)
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  -- 清理本房间 15 秒没心跳的离线玩家
+  delete from public.mp_presence
+   where world_code = p_code and last_seen < now() - interval '15 seconds';
+
+  -- 刷新/插入自己
+  insert into public.mp_presence (world_code, pid, nickname, skin, x, y, z, yaw, pose, last_seen)
+  values (p_code, p_pid,
+          left(coalesce(p_nickname, '小探险家'), 24),
+          coalesce(p_skin, 'burger'),
+          coalesce(p_x, 0), coalesce(p_y, 0), coalesce(p_z, 0),
+          coalesce(p_yaw, 0), coalesce(p_pose, 'stand'), now())
+  on conflict (world_code, pid)
+  do update set nickname = excluded.nickname, skin = excluded.skin,
+                x = excluded.x, y = excluded.y, z = excluded.z,
+                yaw = excluded.yaw, pose = excluded.pose, last_seen = now();
+
+  return query
+    select h.pid, h.nickname, h.skin, h.x, h.y, h.z, h.yaw, h.pose
+      from public.mp_presence h
+     where h.world_code = p_code and h.pid <> p_pid
+     order by h.last_seen desc;
+end;
+$$;
+
+-- 离开房间时调用：主动删除自己的在线记录（立刻下线）。
+create or replace function public.mp_leave_room(p_code text, p_pid text)
+returns void
+language sql
+security definer
+set search_path = public
+as $$
+  delete from public.mp_presence where world_code = p_code and pid = p_pid;
+$$;
+
 -- 完成！现在打开游戏，开始界面会出现“多人共建”面板。

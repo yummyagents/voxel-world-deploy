@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { SimplexNoise } from './noise.js?v=20260925aj';
+import { SimplexNoise } from './noise.js?v=20260925al';
 
 /* ============================================
    常量
@@ -2073,6 +2073,16 @@ export class World {
     const lx = ((wx % CHUNK_SIZE) + CHUNK_SIZE) % CHUNK_SIZE;
     const lz = ((wz % CHUNK_SIZE) + CHUNK_SIZE) % CHUNK_SIZE;
     return chunk.getBlock(lx, wy, lz);
+  }
+
+  /** 取家具朝向 dir(0..3)，未加载或无朝向时返回 0 */
+  getFurnDirAt(wx, wy, wz) {
+    const cx = Math.floor(wx / CHUNK_SIZE), cz = Math.floor(wz / CHUNK_SIZE);
+    const chunk = this.chunks.get(this.chunkKey(cx, cz));
+    if (!chunk) return 0;
+    const lx = ((wx % CHUNK_SIZE) + CHUNK_SIZE) % CHUNK_SIZE;
+    const lz = ((wz % CHUNK_SIZE) + CHUNK_SIZE) % CHUNK_SIZE;
+    return chunk.getFurnDir(lx, wy, lz);
   }
 
   setBlock(wx, wy, wz, type, dir = -1) {

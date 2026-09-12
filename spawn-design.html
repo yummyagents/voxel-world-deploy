@@ -1,0 +1,337 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>像素方块世界 · 出生场景重设计草图 v1</title>
+<style>
+  :root{
+    --pink:#F46B95; --pink-soft:#ffd6e4;
+    --gold:#E0983C; --gold-soft:#F4C46B;
+    --grass:#8fc95a; --grass-d:#5f9e3a; --grass-l:#c7e89a;
+    --sky:#9fd0f5; --sky-deep:#5ea9e6;
+    --panel:#FFF3DC; --ink:#3d2b1f; --ink-soft:#7a6552;
+    --card:#ffffff; --line:#e7d9c2;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0; font-family:"PingFang SC","Microsoft YaHei",system-ui,sans-serif;
+    color:var(--ink); background:#faf3e6; line-height:1.6;
+  }
+  .wrap{max-width:1080px;margin:0 auto;padding:28px 20px 60px;}
+  header.tag{display:inline-block;background:var(--pink);color:#fff;font-size:13px;font-weight:700;
+    padding:4px 12px;border-radius:999px;letter-spacing:1px;}
+  h1{font-size:30px;margin:14px 0 6px;letter-spacing:1px;}
+  h1 .hl{color:var(--pink);}
+  .sub{color:var(--ink-soft);margin:0 0 22px;font-size:15px;}
+  .concept{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin:18px 0 26px;}
+  .concept .c{background:var(--card);border:2px solid var(--line);border-radius:14px;padding:14px;text-align:center;}
+  .concept .c .ic{font-size:26px;}
+  .concept .c b{display:block;font-size:17px;margin:6px 0 2px;}
+  .concept .c span{font-size:13px;color:var(--ink-soft);}
+  section{background:var(--card);border:2px solid var(--line);border-radius:18px;padding:20px 22px;margin:18px 0;
+    box-shadow:0 6px 20px rgba(120,90,40,.07);}
+  section h2{font-size:20px;margin:0 0 4px;display:flex;align-items:center;gap:8px;}
+  section h2 .no{background:var(--gold);color:#fff;width:26px;height:26px;border-radius:8px;display:inline-flex;
+    align-items:center;justify-content:center;font-size:15px;}
+  section .desc{color:var(--ink-soft);font-size:14px;margin:0 0 14px;}
+  .fig{width:100%;border-radius:12px;background:linear-gradient(180deg,#eaf6ff,#f3fbe9);border:1px solid var(--line);}
+  .compare{display:grid;grid-template-columns:1fr 1fr;gap:14px;}
+  .compare .box{border-radius:12px;padding:14px 16px;font-size:14px;}
+  .compare .bad{background:#fdecec;border:1px solid #f3c9c9;}
+  .compare .good{background:#eef9ec;border:1px solid #c6e6bd;}
+  .compare h3{margin:0 0 8px;font-size:15px;}
+  .compare .bad h3{color:#c0392b;} .compare .good h3{color:#2e7d32;}
+  .compare ul{margin:0;padding-left:18px;} .compare li{margin:4px 0;}
+  table{width:100%;border-collapse:collapse;font-size:14px;}
+  th,td{border:1px solid var(--line);padding:8px 10px;text-align:left;}
+  th{background:var(--panel);}
+  .opts{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;}
+  .opt{border:2px solid var(--line);border-radius:14px;padding:14px;position:relative;background:#fff;}
+  .opt.rec{border-color:var(--pink);background:#fff6fa;}
+  .opt .badge{position:absolute;top:-11px;left:12px;background:var(--pink);color:#fff;font-size:12px;
+    font-weight:700;padding:2px 10px;border-radius:999px;}
+  .opt h4{margin:6px 0 6px;font-size:15px;}
+  .opt p{margin:0;font-size:13px;color:var(--ink-soft);}
+  .note{background:var(--panel);border-left:5px solid var(--gold);border-radius:10px;padding:12px 16px;font-size:14px;margin-top:14px;}
+  .legend{display:flex;flex-wrap:wrap;gap:14px;font-size:13px;color:var(--ink-soft);margin-top:10px;}
+  .legend i{display:inline-block;width:14px;height:14px;border-radius:4px;margin-right:5px;vertical-align:-2px;}
+  footer{text-align:center;color:var(--ink-soft);font-size:13px;margin-top:26px;}
+  @media(max-width:760px){.concept{grid-template-columns:repeat(2,1fr);}.compare,.opts{grid-template-columns:1fr;}}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <span class="tag">草图 v1 · 供探讨（暂未改游戏）</span>
+  <h1>出生场景重设计：<span class="hl">一眼望见樱花风车房</span></h1>
+  <p class="sub">目标：一进世界眼前开阔，视线越过草地广场，尽头正中就是「带风车的小房子」在转，樱花在两侧温柔框景——开阔、合理、震撼。</p>
+
+  <div class="concept">
+    <div class="c"><div class="ic">🌄</div><b>开阔</b><span>大平整草地广场，不围栅栏</span></div>
+    <div class="c"><div class="ic">👁️</div><b>留白</b><span>正中视线走廊全空，直达风车</span></div>
+    <div class="c"><div class="ic">🌸</div><b>框景</b><span>樱花退到两侧，天然画框</span></div>
+    <div class="c"><div class="ic">🏠</div><b>层次</b><span>矮房子+屋顶风车，亲切不压迫</span></div>
+  </div>
+
+  <section>
+    <h2><span class="no">1</span>现状问题 vs 新设计</h2>
+    <p class="desc">先对齐"为什么不好看"，再看怎么改。</p>
+    <div class="compare">
+      <div class="box bad">
+        <h3>❌ 现在的问题</h3>
+        <ul>
+          <li>风车是 <b>11 层高塔</b>（总高约 15 格），离出生点仅 ~14 格 → 又高又近，只能<b>仰头</b>看</li>
+          <li>樱花树<b>围风车一圈</b>，还夹道种在你和风车<b>正中间</b> → 视线被切成窄缝</li>
+          <li>大拱门 + 环形围栏把平台围起来，像个小院子，<b>空间显窄</b></li>
+          <li>出生点落在<b>山坡樱花林边</b>，不在平整广场上</li>
+        </ul>
+      </div>
+      <div class="box good">
+        <h3>✅ 新设计</h3>
+        <ul>
+          <li>风车改成<b>一座矮宽磨坊小屋</b>（墙高 ~5、总高 ~8 格），风车叶片装在<b>屋顶/山墙上方</b>转</li>
+          <li>风车<b>拉远</b>到 ~24 格外，成为视线尽头的主角，比例舒服不仰视</li>
+          <li>樱花全部退到<b>广场东西两侧</b>做画框，<b>中轴走廊一棵都不放</b></li>
+          <li>出生点在<b>开阔平整草地</b>正中，去掉围栏；WELCOME 缩成<b>侧边小木牌</b></li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="no">2</span>俯视布局图（上北下南 · 玩家在南朝北看）</h2>
+    <p class="desc">粉色扇形是玩家第一眼的视野；中轴虚线是"留白视线走廊"，整条不放任何遮挡。</p>
+    <svg class="fig" viewBox="0 0 640 720" xmlns="http://www.w3.org/2000/svg">
+      <!-- 天空/背景 -->
+      <rect x="0" y="0" width="640" height="720" fill="#eaf6ff"/>
+      <!-- 远山 + 雾 (北) -->
+      <path d="M0,70 q60,-30 120,0 t120,0 t120,0 t120,0 t160,0 L640,0 L0,0 Z" fill="#c9dcea" opacity="0.9"/>
+      <path d="M0,95 q70,-22 140,0 t140,0 t140,0 t140,0 t80,0" stroke="#a9c4d8" stroke-width="3" fill="none" opacity="0.7"/>
+      <text x="320" y="40" text-anchor="middle" font-size="15" fill="#6f8aa0">远山 · 云雾（自然过渡，不挡主体）</text>
+      <!-- 方向标 N -->
+      <g transform="translate(596,40)">
+        <circle r="18" fill="#fff" stroke="#d8c7ab"/>
+        <path d="M0,-12 L5,6 L0,2 L-5,6 Z" fill="#E0983C"/>
+        <text y="-22" text-anchor="middle" font-size="13" font-weight="700" fill="#7a6552">北</text>
+      </g>
+
+      <!-- 草地大平台 -->
+      <ellipse cx="320" cy="395" rx="252" ry="300" fill="#c7e89a" stroke="#8fc95a" stroke-width="3"/>
+      <ellipse cx="320" cy="395" rx="212" ry="255" fill="#b7e083" opacity="0.6"/>
+
+      <!-- 视野扇形 -->
+      <path d="M320,612 L150,150 L490,150 Z" fill="#F4C46B" opacity="0.22"/>
+      <!-- 中轴视线走廊（留白） -->
+      <line x1="320" y1="612" x2="320" y2="150" stroke="#E0983C" stroke-width="3" stroke-dasharray="9 8"/>
+      <rect x="286" y="180" width="68" height="400" fill="#ffffff" opacity="0.18" rx="10"/>
+      <text x="332" y="380" font-size="13" fill="#b07a1f" transform="rotate(90 332,380)" text-anchor="middle">视线走廊 · 留白（只放低矮花草）</text>
+
+      <!-- 距离标尺 -->
+      <g stroke="#7a6552" stroke-width="1.5">
+        <line x1="250" y1="600" x2="250" y2="165"/>
+        <line x1="244" y1="600" x2="256" y2="600"/>
+        <line x1="244" y1="165" x2="256" y2="165"/>
+      </g>
+      <text x="238" y="385" font-size="14" fill="#7a6552" text-anchor="middle" transform="rotate(-90 238,385)">出生 → 风车 ≈ 24 格</text>
+
+      <!-- 樱花风车房（北中轴）-->
+      <g transform="translate(320,150)">
+        <!-- 房子矮宽 -->
+        <rect x="-42" y="-18" width="84" height="46" rx="3" fill="#f3c9d8" stroke="#d98aae" stroke-width="2.5"/>
+        <path d="M-50,-16 L0,-52 L50,-16 Z" fill="#F46B95" stroke="#c9507c" stroke-width="2.5"/>
+        <!-- 风车叶片在山墙上方 -->
+        <g transform="translate(0,-30)">
+          <circle r="5" fill="#8a5a2b"/>
+          <g stroke="#fff" stroke-width="6" stroke-linecap="round">
+            <line x1="0" y1="0" x2="0" y2="-26"/>
+            <line x1="0" y1="0" x2="0" y2="26"/>
+            <line x1="0" y1="0" x2="-26" y2="0"/>
+            <line x1="0" y1="0" x2="26" y2="0"/>
+          </g>
+          <g stroke="#f2b7cc" stroke-width="6" stroke-linecap="round" opacity="0.0"></g>
+        </g>
+        <!-- 小门 -->
+        <rect x="-8" y="10" width="16" height="18" fill="#8a5a2b"/>
+      </g>
+      <text x="320" y="205" text-anchor="middle" font-size="15" font-weight="700" fill="#c9507c">樱花风车房（矮房 + 屋顶风车）</text>
+
+      <!-- 风车旁樱花（2棵，房子侧后方，不挡正面）-->
+      <circle cx="262" cy="140" r="13" fill="#ffb3cc" stroke="#F46B95" stroke-width="2"/>
+      <circle cx="378" cy="140" r="13" fill="#ffb3cc" stroke="#F46B95" stroke-width="2"/>
+
+      <!-- 两侧樱花带（框景）-->
+      <!-- 西 -->
+      <circle cx="196" cy="232" r="15" fill="#ffb3cc" stroke="#F46B95" stroke-width="2.5"/>
+      <circle cx="184" cy="330" r="15" fill="#ffb3cc" stroke="#F46B95" stroke-width="2.5"/>
+      <circle cx="196" cy="430" r="15" fill="#ffb3cc" stroke="#F46B95" stroke-width="2.5"/>
+      <!-- 东 -->
+      <circle cx="444" cy="232" r="15" fill="#ffb3cc" stroke="#F46B95" stroke-width="2.5"/>
+      <circle cx="456" cy="330" r="15" fill="#ffb3cc" stroke="#F46B95" stroke-width="2.5"/>
+      <circle cx="444" cy="430" r="15" fill="#ffb3cc" stroke="#F46B95" stroke-width="2.5"/>
+      <text x="150" y="335" text-anchor="middle" font-size="13" fill="#c9507c">樱花带</text>
+      <text x="490" y="335" text-anchor="middle" font-size="13" fill="#c9507c">樱花带</text>
+
+      <!-- WELCOME 小木牌（左前侧，不挡中轴）-->
+      <g transform="translate(232,540)">
+        <rect x="-2" y="6" width="5" height="26" fill="#8a5a2b"/>
+        <rect x="-2" y="6" width="5" height="26" fill="#8a5a2b" transform="translate(34,0)"/>
+        <rect x="-14" y="-8" width="60" height="26" rx="5" fill="#F4C46B" stroke="#E0983C" stroke-width="2.5"/>
+        <text x="16" y="10" text-anchor="middle" font-size="12" font-weight="700" fill="#7a4a12">WELCOME</text>
+      </g>
+      <text x="246" y="592" text-anchor="middle" font-size="12" fill="#7a6552">小巧欢迎木牌（侧边）</text>
+
+      <!-- 配景（后撤到东西外侧，淡色）-->
+      <g opacity="0.75">
+        <!-- 小木屋 西外 -->
+        <g transform="translate(96,300)">
+          <rect x="-16" y="-10" width="32" height="22" fill="#d9b98c" stroke="#a67c46" stroke-width="2"/>
+          <path d="M-20,-10 L0,-26 L20,-10 Z" fill="#b56a4a" stroke="#8f4f33" stroke-width="2"/>
+        </g>
+        <text x="96" y="330" text-anchor="middle" font-size="12" fill="#7a6552">小木屋</text>
+        <!-- 池塘 西南 -->
+        <ellipse cx="96" cy="455" rx="24" ry="14" fill="#8fd3ff" stroke="#5aa8e0" stroke-width="2"/>
+        <text x="96" y="486" text-anchor="middle" font-size="12" fill="#7a6552">池塘凉亭</text>
+        <!-- 牧场 东外 -->
+        <g transform="translate(548,360)">
+          <rect x="-20" y="-14" width="40" height="28" rx="4" fill="none" stroke="#a67c46" stroke-width="2" stroke-dasharray="5 4"/>
+          <circle cx="-6" cy="2" r="5" fill="#fff" stroke="#bbb"/>
+          <circle cx="8" cy="4" r="5" fill="#f3c0c0" stroke="#d99"/>
+        </g>
+        <text x="548" y="402" text-anchor="middle" font-size="12" fill="#7a6552">牧场动物</text>
+      </g>
+
+      <!-- 玩家（出生点，南）-->
+      <g transform="translate(320,612)">
+        <path d="M0,-26 L8,-8 L-8,-8 Z" fill="#E0983C"/>
+        <circle r="11" fill="#F46B95" stroke="#fff" stroke-width="3"/>
+        <circle r="4" fill="#fff"/>
+      </g>
+      <text x="320" y="660" text-anchor="middle" font-size="15" font-weight="700" fill="#c9507c">出生点（开阔草地，面朝正北）</text>
+      <text x="320" y="682" text-anchor="middle" font-size="12" fill="#7a6552">脚下是平整草地 + 稀疏小花，无栅栏、无高物</text>
+    </svg>
+    <div class="legend">
+      <span><i style="background:#ffb3cc;border:2px solid #F46B95"></i>樱花树（两侧/风车旁）</span>
+      <span><i style="background:#F4C46B"></i>视野范围</span>
+      <span><i style="background:#fff;opacity:.6"></i>中轴留白走廊</span>
+      <span><i style="background:#8fd3ff"></i>池塘</span>
+      <span><i style="background:#c9dcea"></i>远山雾</span>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="no">3</span>第一人称视角构图（进游戏第一眼）</h2>
+    <p class="desc">震撼感来自"层次"：前景草地 → 中景尽头风车房（主角）→ 远景蓝天白云；樱花只在画面边缘做画框。</p>
+    <svg class="fig" viewBox="0 0 640 400" xmlns="http://www.w3.org/2000/svg">
+      <!-- 天空 -->
+      <defs>
+        <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stop-color="#7ec0f2"/><stop offset="1" stop-color="#cfeafb"/>
+        </linearGradient>
+        <linearGradient id="grass" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stop-color="#a9d873"/><stop offset="1" stop-color="#7cbb4c"/>
+        </linearGradient>
+        <radialGradient id="sun" cx="0.5" cy="0.5" r="0.5">
+          <stop offset="0" stop-color="#fff6d8"/><stop offset="1" stop-color="#ffd98a" stop-opacity="0"/>
+        </radialGradient>
+      </defs>
+      <rect x="0" y="0" width="640" height="270" fill="url(#sky)"/>
+      <rect x="0" y="250" width="640" height="150" fill="url(#grass)"/>
+      <!-- 太阳 + 光晕 -->
+      <circle cx="505" cy="80" r="60" fill="url(#sun)"/>
+      <circle cx="505" cy="80" r="26" fill="#ffe9a8"/>
+      <!-- 云 -->
+      <g fill="#ffffff" opacity="0.9">
+        <ellipse cx="120" cy="70" rx="42" ry="16"/><ellipse cx="150" cy="62" rx="30" ry="14"/>
+        <ellipse cx="400" cy="50" rx="38" ry="14"/><ellipse cx="430" cy="58" rx="26" ry="12"/>
+      </g>
+      <!-- 远山 -->
+      <path d="M0,250 q80,-40 160,-14 t160,-10 t160,-6 t160,-12 L640,250 Z" fill="#b9d2e2" opacity="0.85"/>
+      <!-- 中景：樱花风车房（视线尽头中央，比例适中）-->
+      <g transform="translate(320,238)">
+        <rect x="-40" y="-46" width="80" height="46" rx="3" fill="#f3c9d8" stroke="#d98aae" stroke-width="2"/>
+        <path d="M-48,-44 L0,-80 L48,-44 Z" fill="#F46B95" stroke="#c9507c" stroke-width="2"/>
+        <g transform="translate(0,-58)">
+          <circle r="4.5" fill="#8a5a2b"/>
+          <g stroke="#fff" stroke-width="5" stroke-linecap="round">
+            <line x1="0" y1="0" x2="0" y2="-24"/><line x1="0" y1="0" x2="0" y2="24"/>
+            <line x1="0" y1="0" x2="-24" y2="0"/><line x1="0" y1="0" x2="24" y2="0"/>
+          </g>
+        </g>
+        <rect x="-7" y="-18" width="14" height="18" fill="#8a5a2b"/>
+      </g>
+      <!-- 风车旁樱花（小）-->
+      <circle cx="272" cy="222" r="14" fill="#ffb3cc" stroke="#F46B95" stroke-width="2"/>
+      <circle cx="368" cy="222" r="14" fill="#ffb3cc" stroke="#F46B95" stroke-width="2"/>
+      <!-- 两侧樱花画框（边缘探入，不挡中央）-->
+      <g fill="#ffc2d6" stroke="#F46B95" stroke-width="2" opacity="0.95">
+        <circle cx="-10" cy="60" r="70"/><circle cx="70" cy="30" r="56"/><circle cx="120" cy="90" r="48"/><circle cx="40" cy="140" r="42"/>
+        <circle cx="650" cy="60" r="70"/><circle cx="570" cy="30" r="56"/><circle cx="520" cy="90" r="48"/><circle cx="600" cy="140" r="42"/>
+      </g>
+      <!-- 前景小花 -->
+      <g>
+        <circle cx="120" cy="350" r="4" fill="#fff"/><circle cx="180" cy="375" r="4" fill="#ffd1e3"/>
+        <circle cx="500" cy="360" r="4" fill="#fff"/><circle cx="440" cy="382" r="4" fill="#ffd1e3"/>
+        <circle cx="260" cy="390" r="4" fill="#ffe9a8"/>
+      </g>
+      <!-- WELCOME 小牌 左下 -->
+      <g transform="translate(86,322)">
+        <rect x="-2" y="4" width="5" height="30" fill="#7a4a12"/><rect x="30" y="4" width="5" height="30" fill="#7a4a12"/>
+        <rect x="-14" y="-12" width="56" height="24" rx="5" fill="#F4C46B" stroke="#E0983C" stroke-width="2.5"/>
+        <text x="14" y="5" text-anchor="middle" font-size="12" font-weight="700" fill="#7a4a12">WELCOME</text>
+      </g>
+      <!-- 视线引导（淡）-->
+      <line x1="320" y1="400" x2="320" y2="180" stroke="#fff" stroke-width="2" stroke-dasharray="4 8" opacity="0.5"/>
+      <!-- 标注 -->
+      <g font-size="12" fill="#5f7d4a">
+        <text x="20" y="392">前景：草地小花（低矮不挡）</text>
+        <text x="238" y="150" text-anchor="middle" fill="#c9507c" font-weight="700">中景主角：樱花风车房</text>
+        <text x="620" y="176" text-anchor="end" fill="#c9507c">两侧樱花＝天然画框</text>
+        <text x="620" y="22" text-anchor="end" fill="#3f7196">远景：暖阳 · 云 · 远山</text>
+      </g>
+    </svg>
+  </section>
+
+  <section>
+    <h2><span class="no">4</span>关键尺度参数（体素格，确认后照此搭建）</h2>
+    <table>
+      <tr><th>项目</th><th>现在</th><th>新设计</th></tr>
+      <tr><td>风车建筑</td><td>5×5 高塔，墙高 11、总高 ~15 格</td><td><b>矮宽磨坊小屋</b>：宽 7 × 深 6，墙高 5、加坡屋顶总高 ~8 格；叶片在山墙上方，半径 ~5</td></tr>
+      <tr><td>出生点 → 风车距离</td><td>~14 格（太近）</td><td><b>~24 格</b>（风车在视线尽头，比例舒服）</td></tr>
+      <tr><td>视线走廊</td><td>夹道樱花挡在中间</td><td><b>中轴 x±4 全留白</b>，只放低矮花/草（十字植物，不挡视线）</td></tr>
+      <tr><td>樱花树</td><td>围风车一圈 + 夹道，共 ~15 棵</td><td>退到<b>广场东西两侧</b>各 3 棵（x≈±10）+ 风车旁 2 棵，共 ~8 棵，疏朗</td></tr>
+      <tr><td>WELCOME</td><td>6 格高粉色大拱门 + 大立墙</td><td><b>侧边小木牌</b>（宽 3、高 3），放出生点左前方，不占中轴</td></tr>
+      <tr><td>平台</td><td>环形围栏围合，显窄</td><td><b>去掉围栏</b>，开阔平整草地半径 ~22，边缘自然缓坡接远山</td></tr>
+      <tr><td>配景</td><td>离中轴较近</td><td>木屋/牧场/池塘撤到 <b>x≈±18 以外</b>，不进第一眼正中</td></tr>
+    </table>
+  </section>
+
+  <section>
+    <h2><span class="no">5</span>三个想和你确认的点</h2>
+    <p class="desc">每个我都标了推荐方案，你可以直接说"按推荐来"，或挑你喜欢的组合。</p>
+    <div class="opts">
+      <div class="opt rec">
+        <span class="badge">推荐</span>
+        <h4>A. 风车造型</h4>
+        <p><b>矮宽磨坊小屋 + 屋顶风车</b>（像荷兰磨坊，亲切可爱）。备选：保留高塔但缩小到 ~8 格并拉远。</p>
+      </div>
+      <div class="opt rec">
+        <span class="badge">推荐</span>
+        <h4>B. WELCOME 形式</h4>
+        <p><b>侧边一块小木牌</b>（花园指示牌那种，不挡路）。备选：保留小拱门但缩到宽4高4、也移到侧边。</p>
+      </div>
+      <div class="opt rec">
+        <span class="badge">推荐</span>
+        <h4>C. 樱花疏密</h4>
+        <p><b>两侧疏朗框景</b>（每侧 3 棵、有间距，视线通透）。备选：更密的樱花林带（更浪漫但稍挡）。</p>
+      </div>
+    </div>
+    <div class="note">
+      你确认方向（或告诉我要改哪里，比如风车再大一点 / 樱花再多一点 / 牌子放右边等）后，我就按这份布局<b>重构出生场景</b>，并保证：中央留足空地给小朋友搭建、水依然能进去游泳、手机端也流畅。
+    </div>
+  </section>
+
+  <footer>像素方块世界 · 出生场景设计草图 v1 · 确认后进入重构</footer>
+</div>
+</body>
+</html>

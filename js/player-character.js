@@ -57,12 +57,20 @@ const ARMOR = {
 };
 
 export class PlayerCharacter {
+  // 坐/卧时的交互参数：锚点为家具所在方块
+  static POSE = {
+    sit: { seatTop: 0.5, groupDY: 0.12, groupF: 0, eye: 1.08 },
+    lie: { seatTop: 0.56, groupDY: 0.68, groupF: 0.45, eye: 0.72 },
+  };
+
   constructor(scene) {
     this.group = new THREE.Group();
+    this.group.rotation.order = 'YXZ';
     this.group.visible = false;
     scene.add(this.group);
 
     this.walkPhase = 0;
+    this.pose = 'stand'; // stand | sit | lie
     this.armorLevel = null; // 'iron' | 'diamond' | null
     this.bodyMeshes = {};
     this.armorMeshes = {};
@@ -151,24 +159,34 @@ export class PlayerCharacter {
     this.bodyMeshes.armR = armR;
     this.bodyMeshes.handR = armR; // 手持挂在右手
 
-    // 腿（髋部铰链）
-    const legL = new THREE.Group();
-    const legLmesh = this._box(0.22, 0.72, 0.24, A.pants); legLmesh.position.y = -0.36; legL.add(legLmesh);
-    this.clothParts.pants.push(legLmesh);
-    const shoeL = this._box(0.22, 0.12, 0.28, A.shoes); shoeL.position.set(0, -0.72, 0.02); legL.add(shoeL);
-    this.clothParts.shoes.push(shoeL);
-    legL.position.set(-0.13, 0.55, 0);
-    g.add(legL);
-    this.bodyMeshes.legL = legL;
-
-    const legR = new THREE.Group();
-    const legRmesh = this._box(0.22, 0.72, 0.24, A.pants); legRmesh.position.y = -0.36; legR.add(legRmesh);
-    this.clothParts.pants.push(legRmesh);
-    const shoeR = this._box(0.22, 0.12, 0.28, A.shoes); shoeR.position.set(0, -0.72, 0.02); legR.add(shoeR);
-    this.clothParts.shoes.push(shoeR);
-    legR.position.set(0.13, 0.55, 0);
-    g.add(legR);
-    this.bodyMeshes.legR = legR;
+    // 腿：髋部铰链 + 膝盖铰链（坐姿时小腿自然下垂）
+    const buildLeg = (side) => {
+      const hip = new THREE.Group();
+      const thigh = this._box(0.22, 0.36, 0.24, A.pants);
+      thigh.position.y = -0.18;
+      hip.add(thigh);
+      this.clothParts.pants.push(thigh);
+      const knee = new THREE.Group();
+      knee.position.y = -0.36;
+      const shin = this._box(0.22, 0.36, 0.24, A.pants);
+      shin.position.y = -0.18;
+      knee.add(shin);
+      this.clothParts.pants.push(shin);
+      const shoe = this._box(0.22, 0.12, 0.28, A.shoes);
+      shoe.position.set(0, -0.36, 0.02);
+      knee.add(shoe);
+      this.clothParts.shoes.push(shoe);
+      hip.add(knee);
+      hip.position.set(side * 0.13, 0.55, 0);
+      g.add(hip);
+      return { hip, knee };
+    };
+    const legL = buildLeg(-1);
+    this.bodyMeshes.legL = legL.hip;
+    this.bodyMeshes.kneeL = legL.knee;
+    const legR = buildLeg(1);
+    this.bodyMeshes.legR = legR.hip;
+    this.bodyMeshes.kneeR = legR.knee;
 
     // 护腿甲
     const legsArmor = this._box(0.5, 0.5, 0.3, ARMOR.iron); legsArmor.material.transparent = true; legsArmor.material.opacity = 0.85;
@@ -331,6 +349,41 @@ export class PlayerCharacter {
     }
   }
 
+  /**
+   * 设置角色姿势：stand 站立 / sit 坐在椅子沙发上 / lie 躺在床上。
+   * 位置与朝向仍由 update() 负责，这里只旋转身体部件。
+   */
+  setPose(pose) {
+    if (pose !== 'sit' && pose !== 'lie') pose = 'stand';
+    if (this.pose === pose) return;
+    this.pose = pose;
+    const m = this.bodyMeshes;
+    // 先全部归零（走路摆动在 update 中只对 stand 生效）
+    m.armL.rotation.set(0, 0, 0);
+    m.armR.rotation.set(0, 0, 0);
+    m.legL.rotation.set(0, 0, 0);
+    m.legR.rotation.set(0, 0, 0);
+    m.kneeL.rotation.set(0, 0, 0);
+    m.kneeR.rotation.set(0, 0, 0);
+    m.head.rotation.set(0, 0, 0);
+    m.body.rotation.set(0, 0, 0);
+    if (this.armorMeshes.legs) this.armorMeshes.legs.visible = pose === 'stand' && !!this.armorLevel;
+
+    if (pose === 'sit') {
+      // 大腿前伸成水平，膝盖处小腿垂直下垂；双手自然放大腿
+      m.legL.rotation.x = Math.PI / 2;
+      m.legR.rotation.x = Math.PI / 2;
+      m.kneeL.rotation.x = Math.PI / 2;
+      m.kneeR.rotation.x = Math.PI / 2;
+      m.armL.rotation.x = -0.15;
+      m.armR.rotation.x = -0.15;
+    } else if (pose === 'lie') {
+      // 平躺由组的 rotation.x=π/2 完成，四肢放松微张
+      m.armL.rotation.z = 0.12;
+      m.armR.rotation.z = -0.12;
+    }
+  }
+
   setVisible(v) {
     this.group.visible = v;
   }
@@ -342,27 +395,48 @@ export class PlayerCharacter {
    */
   update(player, dt) {
     if (!player || !player.position) return;
-    // 位置：完整角色跟随玩家身体（第三视角时人物出现在玩家身上，而不是停在世界原点）
-    const moving = player.velocity
-      ? (Math.abs(player.velocity.x) + Math.abs(player.velocity.z)) > 0.6
-      : false;
-    const inAir = player.onGround === false;
-    this.group.position.set(
-      player.position.x,
-      player.position.y + 0.25,
-      player.position.z
-    );
+    const pose = player.pose && player.pose !== 'stand' ? player.pose : 'stand';
+    if (pose !== this.pose) this.setPose(pose);
     // 朝向：模型正面朝 +Z，前向为 (-sin yaw, -cos yaw)，故 rotation.y = yaw + π
     // 第三人称环绕时用 bodyYaw（移动方向，静止保持），第一人称用 yaw。
     const facingYaw = (player._orbitMode && typeof player.bodyYaw === 'number') ? player.bodyYaw : player.yaw;
-    if (typeof facingYaw === 'number') this.group.rotation.y = facingYaw + Math.PI;
-    // 走路摆臂/摆腿
+
+    if (this.pose === 'lie') {
+      // 平躺：锚点在脚端，组沿本地 X 旋转后整个人平向头端（+Z 为头部方向）
+      const cfg = PlayerCharacter.POSE.lie;
+      const fx = -Math.sin(facingYaw), fz = -Math.cos(facingYaw);
+      this.group.position.set(
+        player.position.x - fx * cfg.groupF,
+        player.position.y + cfg.groupDY,
+        player.position.z - fz * cfg.groupF
+      );
+      this.group.rotation.set(Math.PI / 2, facingYaw + Math.PI, 0);
+      return;
+    }
+
+    // 站立/坐姿位置
+    const moving = this.pose === 'stand' && player.velocity
+      ? (Math.abs(player.velocity.x) + Math.abs(player.velocity.z)) > 0.6
+      : false;
+    const inAir = this.pose === 'stand' && player.onGround === false;
+    const sitDY = this.pose === 'sit' ? PlayerCharacter.POSE.sit.groupDY : 0;
+    this.group.position.set(
+      player.position.x,
+      player.position.y + 0.25 + sitDY,
+      player.position.z
+    );
+    if (typeof facingYaw === 'number') this.group.rotation.set(0, facingYaw + Math.PI, 0);
+    if (this.pose === 'sit') return;
+
+    // 走路摆臂/摆腿（含膝盖反向小弯）
     if (moving && !inAir) this.walkPhase += (dt || 0.016) * 9;
     const swing = moving && !inAir ? Math.sin(this.walkPhase) * 0.7 : 0;
     this.bodyMeshes.armL.rotation.x = swing;
     this.bodyMeshes.armR.rotation.x = -swing;
     this.bodyMeshes.legL.rotation.x = -swing;
     this.bodyMeshes.legR.rotation.x = swing;
+    this.bodyMeshes.kneeL.rotation.x = Math.max(0, swing) * 0.5;
+    this.bodyMeshes.kneeR.rotation.x = Math.max(0, -swing) * 0.5;
     // 走路时身体轻微上下（叠加在跟随高度上，不再覆盖整体 y）
     const bob = moving && !inAir ? Math.abs(Math.sin(this.walkPhase)) * 0.04 : 0;
     this.group.position.y += bob;
