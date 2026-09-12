@@ -8,32 +8,32 @@ import {
   World, Chunk, BlockType, BlockNames, isSolid,
   CHUNK_SIZE, CHUNK_HEIGHT, RENDER_DISTANCE, getBlockColor,
   isMobileDevice, getRenderDistance, getBlockDrop, BiomeNames, Biome,
-} from './voxel.js?v=20260925al';
-import { Multiplayer } from './multiplayer.js?v=20260925al';
-import { isCommunityEnabled } from './config.js?v=20260925al';
-import { AnimalManager, Sheep, Rabbit, Horse, Cow, Pig, Chicken, Villager, IronGolem } from './animals.js?v=20260925al';
-import { WeatherSystem, WeatherType, WeatherNames } from './weather.js?v=20260925al';
-import { DayNightCycle } from './daynight.js?v=20260925al';
-import { DropManager } from './drops.js?v=20260925al';
-import { VillageGenerator } from './village.js?v=20260925al';
-import { Inventory } from './inventory.js?v=20260925al';
-import { ExchangeShop } from './exchange.js?v=20260925al';
-import { createHeldModel, createArmModel, ItemNames, getItemIcon, AGENT_ARMS } from './equipment.js?v=20260925al';
-import { StructureGenerator, PLAYER_SPAWN, SAKURA_ISLAND_X, SAKURA_ISLAND_Z } from './structures.js?v=20260925al';
-import { PlayerCharacter } from './player-character.js?v=20260925al';
-import { SakuraPetals } from './sakura.js?v=20260925al';
-import { BirdManager, ButterflyManager } from './birds.js?v=20260925al';
-import { WindmillBlades } from './windmill.js?v=20260925al';
-import { WorldMap } from './world-map.js?v=20260925al';
-import { Fireflies } from './fireflies.js?v=20260925al';
-import { SoundFX } from './audio.js?v=20260925al';
-import { Tutorial } from './tutorial.js?v=20260925al';
+} from './voxel.js?v=20260925an';
+import { Multiplayer } from './multiplayer.js?v=20260925an';
+import { isCommunityEnabled } from './config.js?v=20260925an';
+import { AnimalManager, Sheep, Rabbit, Horse, Cow, Pig, Chicken, Villager, IronGolem } from './animals.js?v=20260925an';
+import { WeatherSystem, WeatherType, WeatherNames } from './weather.js?v=20260925an';
+import { DayNightCycle } from './daynight.js?v=20260925an';
+import { DropManager } from './drops.js?v=20260925an';
+import { VillageGenerator } from './village.js?v=20260925an';
+import { Inventory } from './inventory.js?v=20260925an';
+import { ExchangeShop } from './exchange.js?v=20260925an';
+import { createHeldModel, createArmModel, ItemNames, getItemIcon, AGENT_ARMS } from './equipment.js?v=20260925an';
+import { StructureGenerator, PLAYER_SPAWN, SAKURA_ISLAND_X, SAKURA_ISLAND_Z } from './structures.js?v=20260925an';
+import { PlayerCharacter } from './player-character.js?v=20260925an';
+import { SakuraPetals } from './sakura.js?v=20260925an';
+import { BirdManager, ButterflyManager } from './birds.js?v=20260925an';
+import { WindmillBlades } from './windmill.js?v=20260925an';
+import { WorldMap } from './world-map.js?v=20260925an';
+import { Fireflies } from './fireflies.js?v=20260925an';
+import { SoundFX } from './audio.js?v=20260925an';
+import { Tutorial } from './tutorial.js?v=20260925an';
 import {
   loadSave, writeSave, clearSave, hasSave,
   exportSave, importSave,
-} from './save.js?v=20260925al';
-import { Portfolio } from './portfolio.js?v=20260925al';
-import { buildFurnitureGroup } from './furniture.js?v=20260925al';
+} from './save.js?v=20260925an';
+import { Portfolio } from './portfolio.js?v=20260925an';
+import { buildFurnitureGroup } from './furniture.js?v=20260925an';
 
 // 多人联机：队友超过该水平距离（格）时，屏幕边缘出现方向指引
 const TEAM_POINTER_SHOW_DIST = 40;
@@ -1078,6 +1078,11 @@ class Game {
     this._recallCooldown = 0;
     this._initChatUI();
 
+    // 【关键】开始界面的"下一步/选特工"交互是纯 DOM 操作，必须在世界区块生成（init 中大量 await）
+    // 之前就绑定好。否则一旦区块生成中途卡住/挂起，欢迎页能显示但按钮永远点不动。
+    try { this._initCharSelect(); } catch (e) { console.warn('[char] 提前初始化失败', e); }
+    try { this._initStartSteps(); } catch (e) { console.warn('[steps] 提前初始化失败', e); }
+
     // 热键栏 9 格由 inventory.js 控制（E 键打开创造背包配置）
     this.hotbarCount = 9;
     this.selectedSlot = 0;
@@ -2079,6 +2084,9 @@ class Game {
         if (this.world) this.saveNow(true);
       }
     });
+
+    // 世界与全部界面初始化完成：允许"开始冒险"进入
+    this._initReady = true;
   }
 
   /** 多人共建面板：昵称 / 建房 / 加入房间码 / 复制房码 */
@@ -2202,6 +2210,8 @@ class Game {
    *  采用「事件委托」：监听绑在 document 捕获层，点击落到角色卡任意位置（含头像/名字）
    *  都能命中；不依赖逐卡绑定，也不怕子元素吞事件。桌面移动通用。 */
   _initCharSelect() {
+    if (this._charSelectInited) return;
+    this._charSelectInited = true;
     this.character = this._getSelectedChar();
     const VALID = ['burger', 'fries', 'popcorn', 'witch'];
     const cards = () => Array.from(document.querySelectorAll('#startScreen .char-card'));
@@ -2272,6 +2282,8 @@ class Game {
   /** 开始界面标签页切换（开始游戏 / 留言墙 / 存档更多） */
   /** 开始界面两步引导：第 1 步欢迎+留言墙 → 第 2 步选特工+开始 */
   _initStartSteps() {
+    if (this._startStepsInited) return;
+    this._startStepsInited = true;
     const steps = Array.from(document.querySelectorAll('#startScreen .start-step'));
     const dots = Array.from(document.querySelectorAll('#startScreen .step-dots .sd'));
     const nextBtn = document.getElementById('stepNextBtn');
@@ -2476,12 +2488,31 @@ class Game {
 
   /** 初始化渲染器 */
   _initRenderer() {
-    this.renderer = new THREE.WebGLRenderer({
-      canvas: this.canvas,
-      antialias: false,
-      powerPreference: this.isMobile ? 'low-power' : 'default',
-      preserveDrawingBuffer: true, // 支持作品集截图（toDataURL）
-    });
+    let renderer = null;
+    try {
+      renderer = new THREE.WebGLRenderer({
+        canvas: this.canvas,
+        antialias: false,
+        powerPreference: this.isMobile ? 'low-power' : 'default',
+        preserveDrawingBuffer: true, // 支持作品集截图（toDataURL）
+      });
+    } catch (err) {
+      renderer = null;
+    }
+    if (!renderer || !renderer.getContext || !renderer.getContext()) {
+      // WebGL 不可用：明确提示，而不是继续进主循环导致画面/输入全卡死
+      this.renderer = null;
+      const tip = '当前浏览器无法开启 3D 渲染（WebGL）。请换用最新版 Chrome / Edge / Safari，'
+        + '或在系统设置里开启"硬件加速 / 硬件加速图形"后刷新重试。';
+      console.error('[WebGL 初始化失败]', tip);
+      if (window.__showErrorOverlay) window.__showErrorOverlay(tip);
+      const bar = document.getElementById('loadingFill');
+      if (bar) bar.style.width = '100%';
+      const lb = document.getElementById('loadingBar');
+      if (lb) lb.style.display = 'none';
+      throw new Error('WebGL context unavailable');
+    }
+    this.renderer = renderer;
     this.renderer.setSize(window.innerWidth, window.innerHeight);
     // 移动端降低像素比以提升性能
     const maxPixelRatio = this.isMobile ? 1.2 : 2;
@@ -3429,6 +3460,8 @@ class Game {
         if (this.isPointerLocked) {
           this.ui.pauseScreen.style.display = 'none';
           this._showGameUI(true);
+          const ov = document.getElementById('errOverlay');
+          if (ov) ov.hidden = true;
         } else if (this.isRunning && !this._suppressPause && !this._menuOpen && !this._anyMenuOpen()) {
           // 真正失去焦点（非打开背包/商店/相册）时才显示暂停菜单
           this.ui.pauseScreen.style.display = 'flex';
@@ -3437,11 +3470,18 @@ class Game {
 
       const requestLock = () => {
         if (!this.isPointerLocked && this.isRunning) {
-          this.canvas.requestPointerLock();
+          try {
+            const r = this.canvas.requestPointerLock();
+            // 新版浏览器可能返回 Promise（失败会 reject），捕获后给出可恢复提示
+            if (r && typeof r.catch === 'function') {
+              r.catch((err) => this._onPointerLockFail(err));
+            }
+          } catch (err) { this._onPointerLockFail(err); }
         }
       };
 
       const enterGame = () => {
+        if (!this._initReady) { this._toast('世界还在生成中，请稍等一两秒再点～'); return; }
         // 确保已同步当前选择的主角，避免“先进游戏后卡片没生效”
         this.character = this._getSelectedChar(); if (this.playerChar) this.playerChar.setSkin(this.character);
         // 第一人称手臂颜色也按所选角色重建
@@ -3475,11 +3515,14 @@ class Game {
 
       this.ui.pauseScreen.addEventListener('click', requestLock);
       this.canvas.addEventListener('click', requestLock);
+      // 指针锁定被浏览器/系统拒绝时，明确提示并允许点击画面重试，而不是卡在静止世界
+      this.canvas.addEventListener('pointerlockerror', () => this._onPointerLockFail(null));
     }
 
     // ----- 移动端：直接进入游戏 + 触摸控制 -----
     if (this.isMobile) {
       const enterGameMobile = () => {
+        if (!this._initReady) { this._toast('世界还在生成中，请稍等一两秒再点～'); return; }
         this.character = this._getSelectedChar(); if (this.playerChar) this.playerChar.setSkin(this.character);
         // 第一人称手臂颜色也按所选角色重建
         try { this._refreshHeldView(); } catch (e) {}
@@ -3522,6 +3565,23 @@ class Game {
 
     // 窗口尺寸变化
     window.addEventListener('resize', () => this._onResize());
+  }
+
+  /** 指针锁定失败：不能让世界静止死锁，回退到"点击继续"暂停屏，点击即重新请求锁定 */
+  _onPointerLockFail(err) {
+    if (err) console.warn('[指针锁定失败]', err);
+    if (!this.isRunning || this.isPointerLocked || this.isMobile) return;
+    if (window.__showErrorOverlay) {
+      window.__showErrorOverlay('鼠标锁定没成功（可能是浏览器弹窗拦截或权限问题）。点一下画面即可继续，若反复出现请用最新版 Chrome/Edge 全屏打开。');
+    }
+    // 短暂展示后自动收起浮层提示，避免长期遮挡（暂停屏提供点击恢复入口）
+    setTimeout(() => {
+      const ov = document.getElementById('errOverlay');
+      if (ov) ov.hidden = true;
+    }, 6000);
+    try {
+      if (this.ui && this.ui.pauseScreen) this.ui.pauseScreen.style.display = 'flex';
+    } catch (e) { /* ignore */ }
   }
 
   /** 显示/隐藏游戏HUD */
@@ -3619,6 +3679,7 @@ class Game {
   /** 主游戏循环 */
   animate() {
     requestAnimationFrame(() => this.animate());
+    if (!this.renderer || !this.scene || !this.camera) return;
 
     const dt = this.clock.getDelta();
 
@@ -3645,6 +3706,7 @@ class Game {
 
     // 桌面端指针锁定 或 移动端运行时更新游戏逻辑
     if (this.isPointerLocked || (this.isMobile && this.isRunning)) {
+     try {
       const wasOnGround = this.player.onGround;
       this.player.update(dt);
       // 起跳瞬间播放音效（地面 → 快速上升）
@@ -3707,6 +3769,15 @@ class Game {
         this.player.position.y + this.player.eyeHeight,
         this.player.position.z
       );
+    }
+     } catch (frameErr) {
+       // 单帧逻辑异常：记录一次并显示，但不中断后续帧（避免永久卡死）
+       if (!this._frameErrShown) {
+         this._frameErrShown = true;
+         console.error('[帧逻辑错误]', frameErr);
+         if (window.__showErrorOverlay) window.__showErrorOverlay('帧错误：' + (frameErr && frameErr.message));
+       }
+     }
     }
 
     // 昼夜循环（始终更新），并按玩家所在群系给远景雾轻微染色（空气透视）
@@ -3822,8 +3893,16 @@ class Game {
       this._celebrates = this._celebrates.filter(fn => fn(dt));
     }
 
-    // 渲染
-    this.renderer.render(this.scene, this.camera);
+    // 渲染（单独保护：渲染异常不应打断下一帧）
+    try {
+      this.renderer.render(this.scene, this.camera);
+    } catch (err) {
+      if (!this._renderErrShown) {
+        this._renderErrShown = true;
+        console.error('[渲染失败]', err);
+        if (window.__showErrorOverlay) window.__showErrorOverlay('渲染错误：' + (err && err.message));
+      }
+    }
 
     // 更新UI
     if (this.frameCount % 10 === 0) {
@@ -3844,6 +3923,9 @@ window.addEventListener('DOMContentLoaded', async () => {
     console.error('[init 失败]', err);
     const bar = document.getElementById('loadingBar');
     if (bar) bar.style.display = 'none';
+    if (window.__showErrorOverlay) {
+      window.__showErrorOverlay('初始化失败：' + ((err && (err.stack || err.message)) || String(err)).split('\n').slice(0, 4).join(' ⏎ '));
+    }
   }
   // 即使 init 部分失败，也尽量启动主循环，避免"点击开始无反应"
   try {
@@ -3853,7 +3935,24 @@ window.addEventListener('DOMContentLoaded', async () => {
   }
 });
 
-// 全局兜底：任何未捕获错误都打印，避免静默卡死
+// 全局兜底：任何未捕获错误都打印，并显示到屏幕浮层，避免静默卡死
+function __showErrorOverlay(msg) {
+  try {
+    const el = document.getElementById('errOverlay');
+    if (!el) return;
+    const line = document.createElement('div');
+    line.textContent = '⚠ ' + msg;
+    el.appendChild(line);
+    el.hidden = false;
+  } catch (e) { /* ignore */ }
+}
+window.__showErrorOverlay = __showErrorOverlay;
 window.addEventListener('error', (e) => {
   console.error('[运行时错误]', e.message, e.filename, e.lineno, e.error);
+  __showErrorOverlay(`${e.message} (${(e.filename || '').split('/').pop()}:${e.lineno})`);
+});
+window.addEventListener('unhandledrejection', (e) => {
+  const msg = (e.reason && (e.reason.stack || e.reason.message)) || String(e.reason);
+  console.error('[未处理 Promise]', msg);
+  __showErrorOverlay('Promise: ' + String(msg).split('\n')[0]);
 });

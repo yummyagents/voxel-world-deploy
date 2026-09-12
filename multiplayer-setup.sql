@@ -133,49 +133,57 @@ create policy mp_presence_write_public
 
 -- 心跳 RPC：刷新自己的在线状态 + 清理本房间过期记录 + 返回当前在线名单。
 -- 用一个请求完成"上报 + 拉名单"，SECURITY DEFINER 以便 DELETE 过期行。
+-- 防 42702 ambiguous：入参用 v_ 前缀（与表列/返回列不同名），#variable_conflict use_column，
+-- 且返回查询全程用表别名 h 限定列。
+-- 先按"参数类型"删除可能存在的旧版本（参数名不同也算同一个函数，按类型即可删干净）。
+drop function if exists public.mp_heartbeat(text, text, text, text, real, real, real, real, text);
+drop function if exists public.mp_leave_room(text, text);
+
 create or replace function public.mp_heartbeat(
-  p_code text, p_pid text, p_nickname text default '小探险家',
-  p_skin text default 'burger', p_x real default 0, p_y real default 0,
-  p_z real default 0, p_yaw real default 0, p_pose text default 'stand'
+  v_code text, v_pid text, v_nickname text default '小探险家',
+  v_skin text default 'burger', v_x real default 0, v_y real default 0,
+  v_z real default 0, v_yaw real default 0, v_pose text default 'stand'
 )
 returns table (pid text, nickname text, skin text, x real, y real, z real, yaw real, pose text)
 language plpgsql
 security definer
 set search_path = public
 as $$
+#variable_conflict use_column
 begin
   -- 清理本房间 15 秒没心跳的离线玩家
-  delete from public.mp_presence
-   where world_code = p_code and last_seen < now() - interval '15 seconds';
+  delete from public.mp_presence as p
+   where p.world_code = v_code and p.last_seen < now() - interval '15 seconds';
 
-  -- 刷新/插入自己
+  -- 刷新/插入自己（INSERT 的 VALUES 里没有表列歧义，直接引用入参即可）
   insert into public.mp_presence (world_code, pid, nickname, skin, x, y, z, yaw, pose, last_seen)
-  values (p_code, p_pid,
-          left(coalesce(p_nickname, '小探险家'), 24),
-          coalesce(p_skin, 'burger'),
-          coalesce(p_x, 0), coalesce(p_y, 0), coalesce(p_z, 0),
-          coalesce(p_yaw, 0), coalesce(p_pose, 'stand'), now())
+  values (v_code, v_pid,
+          left(coalesce(v_nickname, '小探险家'), 24),
+          coalesce(v_skin, 'burger'),
+          coalesce(v_x, 0), coalesce(v_y, 0), coalesce(v_z, 0),
+          coalesce(v_yaw, 0), coalesce(v_pose, 'stand'), now())
   on conflict (world_code, pid)
   do update set nickname = excluded.nickname, skin = excluded.skin,
                 x = excluded.x, y = excluded.y, z = excluded.z,
                 yaw = excluded.yaw, pose = excluded.pose, last_seen = now();
 
+  -- 返回在线的其他人；#variable_conflict use_column + 别名 h，确保 h.pid 取表列
   return query
     select h.pid, h.nickname, h.skin, h.x, h.y, h.z, h.yaw, h.pose
       from public.mp_presence h
-     where h.world_code = p_code and h.pid <> p_pid
+     where h.world_code = v_code and h.pid <> v_pid
      order by h.last_seen desc;
 end;
 $$;
 
 -- 离开房间时调用：主动删除自己的在线记录（立刻下线）。
-create or replace function public.mp_leave_room(p_code text, p_pid text)
+create or replace function public.mp_leave_room(v_code text, v_pid text)
 returns void
 language sql
 security definer
 set search_path = public
 as $$
-  delete from public.mp_presence where world_code = p_code and pid = p_pid;
+  delete from public.mp_presence as p where p.world_code = v_code and p.pid = v_pid;
 $$;
 
 -- 完成！现在打开游戏，开始界面会出现“多人共建”面板。

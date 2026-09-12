@@ -5,6 +5,27 @@
 /* hidden 属性必须真正隐藏（防止 display 规则覆盖，如多人徽章/横幅） */
 [hidden] { display: none !important; }
 
+/* 运行时错误浮层：出问题时直接在屏幕上提示，便于家长截图排查 */
+.err-overlay {
+  position: fixed;
+  left: 12px;
+  top: 12px;
+  z-index: 10000;
+  max-width: min(92vw, 640px);
+  max-height: 46vh;
+  overflow: auto;
+  padding: 10px 12px;
+  background: rgba(40, 0, 0, 0.88);
+  border: 2px solid #ff6b6b;
+  border-radius: 8px;
+  color: #ffe3e3;
+  font: 12px/1.5 'Courier New', monospace;
+  white-space: pre-wrap;
+  word-break: break-word;
+  pointer-events: auto;
+}
+.err-overlay b { color: #ff9b9b; }
+
 /* 全局重置 */
 * {
   margin: 0;

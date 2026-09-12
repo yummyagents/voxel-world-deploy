@@ -1,7 +1,7 @@
 // multiplayer.js —— 多人联机同步（浏览器直连 Supabase）
 // 负责：创建/加入房间、拉取共建方块、Realtime 实时同步放拆与玩家现身。
 // 未配置 Supabase 或库未加载时自动禁用，不影响单机游戏。
-import { SUPABASE_URL, SUPABASE_ANON_KEY, isCommunityEnabled } from './config.js?v=20260925al';
+import { SUPABASE_URL, SUPABASE_ANON_KEY, isCommunityEnabled } from './config.js?v=20260925an';
 
 const PID_KEY = 'voxel_mp_pid_v1';
 const NAME_KEY = 'voxel_mp_name_v1';
@@ -344,9 +344,9 @@ export class Multiplayer {
     this._hbInFlight = true;
     try {
       const { data, error } = await this.client.rpc('mp_heartbeat', {
-        p_code: this.roomCode, p_pid: this.playerId, p_nickname: this.nickname,
-        p_skin: this.skin, p_x: this.pos.x, p_y: this.pos.y, p_z: this.pos.z,
-        p_yaw: this.pos.yaw, p_pose: this.pos.pose || 'stand',
+        v_code: this.roomCode, v_pid: this.playerId, v_nickname: this.nickname,
+        v_skin: this.skin, v_x: this.pos.x, v_y: this.pos.y, v_z: this.pos.z,
+        v_yaw: this.pos.yaw, v_pose: this.pos.pose || 'stand',
       });
       if (error) {
         // 首次遇到"函数/表不存在"：提示一次并停用心跳通道（老 SQL 未更新），不影响 WebSocket 通道
@@ -500,7 +500,7 @@ export class Multiplayer {
     if (this.heartbeatTimer) { clearInterval(this.heartbeatTimer); this.heartbeatTimer = null; }
     if (this.editPollTimer) { clearInterval(this.editPollTimer); this.editPollTimer = null; }
     // 主动通知心跳通道立即下线（失败也无妨，15 秒后会自动过期）
-    if (code && this.client) { try { this.client.rpc('mp_leave_room', { p_code: code, p_pid: pid }); } catch (e) {} }
+    if (code && this.client) { try { this.client.rpc('mp_leave_room', { v_code: code, v_pid: pid }); } catch (e) {} }
     if (this.channel && this.client) { try { this.client.removeChannel(this.channel); } catch (e) {} }
     this.channel = null;
   }
